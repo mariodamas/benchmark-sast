@@ -1,0 +1,30 @@
+# Resultados del benchmark (no versionar — son artefactos, no código)
+results/raw/
+results/deduplicated/
+results/metrics/
+
+# IDirs de Coverity (muy pesados)
+**/idir_V/
+**/idir_S/
+
+# DBs de CodeQL
+**/db_V/
+**/db_S/
+
+# Repos clonados
+/tmp/repos/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Entornos
+.venv/
+venv/
+
+# Secretos (nunca versionar tokens de Coverity)
+.env
+*.token
+coverity_auth_key_*

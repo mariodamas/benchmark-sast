@@ -1,0 +1,375 @@
+# .github/workflows/sast_benchmark.yml
+# =============================================================================
+# Pipeline CI del Benchmark SAST — TFG Mario Damas Sánchez
+# Ejecuta el benchmark completo en dos fases:
+#   Phase PRIMARY:    mbedTLS  → CodeQL + Coverity + Dedup + Métricas
+#   Phase VALIDATION: wolfSSL  → CodeQL + Coverity + Dedup + Métricas
+#   Phase CROSS:      Consistencia cross-project
+#
+# NOTAS DE AISLAMIENTO:
+#   - Cada fase corre en su propio job para que los entornos no se contaminen.
+#   - Los artefactos (SARIF, JSON, métricas) se guardan como GitHub Artifacts
+#     y no se suben a ningún dashboard externo en este stage (POC-01, no CAP-02).
+#   - Coverity requiere secret COVERITY_LICENSE_URL y COVERITY_TOKEN.
+#     Si no están disponibles, el job de Coverity se salta con warning.
+# =============================================================================
+
+name: SAST Benchmark — POC-01
+
+on:
+  workflow_dispatch:
+    inputs:
+      only_cve:
+        description: 'CVE ID específico a evaluar (vacío = todos)'
+        required: false
+        default: ''
+      phase:
+        description: 'Fase a ejecutar'
+        required: false
+        default: 'all'
+        type: choice
+        options: [all, primary, validation, cross]
+  push:
+    paths:
+      - 'corpus/**'
+      - 'runner/**'
+      - 'deduplicator/**'
+      - 'metrics/**'
+      - '.github/workflows/sast_benchmark.yml'
+
+env:
+  PYTHON_VERSION: '3.11'
+  CODEQL_VERSION: '2.16.5'
+  MBED_KLOC: '60'
+  WOLFSSL_KLOC: '45'
+
+# ---------------------------------------------------------------------------
+# JOB 1: Preparación del entorno
+# ---------------------------------------------------------------------------
+jobs:
+  setup:
+    name: Setup & Validate Ground Truth
+    runs-on: ubuntu-22.04
+    outputs:
+      mbedtls_instances: ${{ steps.gt.outputs.mbedtls_instances }}
+      wolfssl_instances: ${{ steps.gt.outputs.wolfssl_instances }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Python deps
+        run: pip install pyyaml jsonschema
+
+      - name: Validate ground truth schemas
+        run: |
+          python scripts/validate_ground_truth.py \
+            --gt corpus/mbedtls/ground_truth.yaml \
+            --gt corpus/wolfssl/ground_truth.yaml
+
+      - name: Count instances
+        id: gt
+        run: |
+          python - <<'EOF'
+          import yaml, json, os
+          def count(path):
+              with open(path) as f: gt = yaml.safe_load(f)
+              evaluable = [i for i in gt['instances'] if not i.get('structural_fn')]
+              return len(evaluable)
+          mbedtls = count('corpus/mbedtls/ground_truth.yaml')
+          wolfssl = count('corpus/wolfssl/ground_truth.yaml')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"mbedtls_instances={mbedtls}\n")
+              f.write(f"wolfssl_instances={wolfssl}\n")
+          print(f"mbedTLS evaluable: {mbedtls} | wolfSSL evaluable: {wolfssl}")
+          EOF
+
+  # ---------------------------------------------------------------------------
+  # JOB 2: CodeQL sobre mbedTLS (fase primary)
+  # ---------------------------------------------------------------------------
+  codeql_mbedtls:
+    name: CodeQL — mbedTLS (Primary)
+    needs: setup
+    runs-on: ubuntu-22.04
+    if: >
+      github.event.inputs.phase == 'all' ||
+      github.event.inputs.phase == 'primary' ||
+      github.event.inputs.phase == ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CodeQL
+        run: |
+          wget -q "https://github.com/github/codeql-action/releases/download/codeql-bundle-v${{ env.CODEQL_VERSION }}/codeql-bundle-linux64.tar.gz"
+          tar -xzf codeql-bundle-linux64.tar.gz -C /opt
+          echo "/opt/codeql" >> $GITHUB_PATH
+
+      - name: Install build deps (mbedTLS)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake build-essential python3-pyyaml
+
+      - name: Clone mbedTLS
+        run: |
+          git clone --quiet https://github.com/Mbed-TLS/mbedtls.git /tmp/repos/mbedtls
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run CodeQL runner
+        run: |
+          ONLY_CVE_ARG=""
+          if [ -n "${{ github.event.inputs.only_cve }}" ]; then
+            ONLY_CVE_ARG="--only-cve ${{ github.event.inputs.only_cve }}"
+          fi
+          python runner/codeql/run_codeql.py \
+            --ground-truth corpus/mbedtls/ground_truth.yaml \
+            --repo-path /tmp/repos/mbedtls \
+            --output-dir results/raw/codeql/mbedtls \
+            --codeql-binary /opt/codeql/codeql \
+            --threads 4 \
+            --skip-existing \
+            $ONLY_CVE_ARG
+
+      - name: Upload CodeQL SARIF artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-mbedtls-sarif
+          path: results/raw/codeql/mbedtls/
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # JOB 3: Coverity sobre mbedTLS (fase primary)
+  # ---------------------------------------------------------------------------
+  coverity_mbedtls:
+    name: Coverity — mbedTLS (Primary)
+    needs: setup
+    runs-on: ubuntu-22.04
+    if: >
+      (github.event.inputs.phase == 'all' ||
+      github.event.inputs.phase == 'primary' ||
+      github.event.inputs.phase == '') &&
+      secrets.COVERITY_TOKEN != ''
+    env:
+      COVERITY_TOKEN: ${{ secrets.COVERITY_TOKEN }}
+      COVERITY_HOME: /opt/cov-analysis
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Coverity license availability
+        id: license_check
+        run: |
+          if [ -z "$COVERITY_TOKEN" ]; then
+            echo "SKIP=true" >> $GITHUB_OUTPUT
+            echo "::warning::COVERITY_TOKEN no definido. Saltando análisis Coverity."
+          else
+            echo "SKIP=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install Coverity Analysis
+        if: steps.license_check.outputs.SKIP == 'false'
+        run: |
+          # La instalación real requiere el paquete de Synopsys.
+          # En CI corporativo con licencia, sustituir por el script de instalación real.
+          echo "Coverity install placeholder — sustituir por instalación real en entorno corporativo"
+          # wget -q "$COVERITY_DOWNLOAD_URL" -O cov-analysis.tar.gz
+          # tar -xzf cov-analysis.tar.gz -C /opt
+
+      - name: Install build deps (mbedTLS)
+        run: sudo apt-get install -y cmake build-essential
+
+      - name: Clone mbedTLS
+        run: git clone --quiet https://github.com/Mbed-TLS/mbedtls.git /tmp/repos/mbedtls
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run Coverity runner
+        if: steps.license_check.outputs.SKIP == 'false'
+        run: |
+          ONLY_CVE_ARG=""
+          if [ -n "${{ github.event.inputs.only_cve }}" ]; then
+            ONLY_CVE_ARG="--only-cve ${{ github.event.inputs.only_cve }}"
+          fi
+          python runner/coverity/run_coverity.py \
+            --ground-truth corpus/mbedtls/ground_truth.yaml \
+            --repo-path /tmp/repos/mbedtls \
+            --output-dir results/raw/coverity/mbedtls \
+            --coverity-home $COVERITY_HOME \
+            --threads 4 \
+            --skip-existing \
+            $ONLY_CVE_ARG
+
+      - name: Upload Coverity JSON artifacts
+        if: steps.license_check.outputs.SKIP == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverity-mbedtls-json
+          path: results/raw/coverity/mbedtls/
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # JOB 4: Deduplicación + Métricas mbedTLS
+  # ---------------------------------------------------------------------------
+  evaluate_mbedtls:
+    name: Dedup + Metrics — mbedTLS
+    needs: [codeql_mbedtls, coverity_mbedtls]
+    runs-on: ubuntu-22.04
+    if: always() && needs.codeql_mbedtls.result == 'success'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install deps
+        run: pip install pyyaml
+
+      - name: Download CodeQL artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: codeql-mbedtls-sarif
+          path: results/raw/codeql/mbedtls/
+
+      - name: Download Coverity artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: coverity-mbedtls-json
+          path: results/raw/coverity/mbedtls/
+        continue-on-error: true   # Coverity puede no estar disponible
+
+      - name: Run deduplication
+        run: |
+          python deduplicator/dedup_findings.py \
+            --ground-truth corpus/mbedtls/ground_truth.yaml \
+            --codeql-results results/raw/codeql/mbedtls \
+            --coverity-results results/raw/coverity/mbedtls \
+            --output-dir results/deduplicated/mbedtls \
+            --line-window 10
+
+      - name: Compute metrics
+        run: |
+          python metrics/compute_metrics.py \
+            --dedup-dir results/deduplicated/mbedtls \
+            --output-dir results/metrics/mbedtls \
+            --kloc ${{ env.MBED_KLOC }} \
+            --phase primary \
+            --ground-truth corpus/mbedtls/ground_truth.yaml
+
+      - name: Print summary to Job Summary
+        run: |
+          python scripts/print_summary.py \
+            --metrics results/metrics/mbedtls/benchmark_summary.json \
+            >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics-mbedtls
+          path: results/metrics/mbedtls/
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # JOB 5-6: wolfSSL (validation) — misma estructura
+  # ---------------------------------------------------------------------------
+  codeql_wolfssl:
+    name: CodeQL — wolfSSL (Validation)
+    needs: setup
+    runs-on: ubuntu-22.04
+    if: >
+      github.event.inputs.phase == 'all' ||
+      github.event.inputs.phase == 'validation' ||
+      github.event.inputs.phase == ''
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CodeQL
+        run: |
+          wget -q "https://github.com/github/codeql-action/releases/download/codeql-bundle-v${{ env.CODEQL_VERSION }}/codeql-bundle-linux64.tar.gz"
+          tar -xzf codeql-bundle-linux64.tar.gz -C /opt
+          echo "/opt/codeql" >> $GITHUB_PATH
+      - name: Install build deps (wolfSSL — autoconf)
+        run: sudo apt-get install -y autoconf automake libtool build-essential bear
+      - name: Clone wolfSSL
+        run: git clone --quiet https://github.com/wolfSSL/wolfssl.git /tmp/repos/wolfssl
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Run CodeQL runner (wolfSSL)
+        run: |
+          python runner/codeql/run_codeql.py \
+            --ground-truth corpus/wolfssl/ground_truth.yaml \
+            --repo-path /tmp/repos/wolfssl \
+            --output-dir results/raw/codeql/wolfssl \
+            --codeql-binary /opt/codeql/codeql \
+            --threads 4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codeql-wolfssl-sarif
+          path: results/raw/codeql/wolfssl/
+          retention-days: 30
+
+  evaluate_wolfssl:
+    name: Dedup + Metrics + Cross — wolfSSL
+    needs: [codeql_wolfssl, evaluate_mbedtls]
+    runs-on: ubuntu-22.04
+    if: always() && needs.codeql_wolfssl.result == 'success'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install pyyaml
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: codeql-wolfssl-sarif
+          path: results/raw/codeql/wolfssl/
+
+      - name: Run deduplication (wolfSSL)
+        run: |
+          python deduplicator/dedup_findings.py \
+            --ground-truth corpus/wolfssl/ground_truth.yaml \
+            --codeql-results results/raw/codeql/wolfssl \
+            --coverity-results results/raw/coverity/wolfssl \
+            --output-dir results/deduplicated/wolfssl \
+            --line-window 10
+
+      - name: Compute metrics (wolfSSL)
+        run: |
+          python metrics/compute_metrics.py \
+            --dedup-dir results/deduplicated/wolfssl \
+            --output-dir results/metrics/wolfssl \
+            --kloc ${{ env.WOLFSSL_KLOC }} \
+            --phase validation
+
+      - name: Download mbedTLS metrics (for cross-project)
+        uses: actions/download-artifact@v4
+        with:
+          name: metrics-mbedtls
+          path: results/metrics/mbedtls/
+
+      - name: Cross-project consistency analysis
+        run: |
+          python scripts/cross_project_analysis.py \
+            --primary-metrics results/metrics/mbedtls/instance_level_metrics.json \
+            --validation-metrics results/metrics/wolfssl/instance_level_metrics.json \
+            --output results/metrics/cross_project_consistency.json
+
+      - name: Final summary to Job Summary
+        run: |
+          python scripts/print_final_report.py \
+            --primary-metrics results/metrics/mbedtls/benchmark_summary.json \
+            --validation-metrics results/metrics/wolfssl/benchmark_summary.json \
+            --cross results/metrics/cross_project_consistency.json \
+            >> $GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-final-report
+          path: results/metrics/
+          retention-days: 180
