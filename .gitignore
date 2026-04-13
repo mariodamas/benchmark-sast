@@ -1,22 +1,31 @@
-# Resultados del benchmark (no versionar — son artefactos, no código)
-results/raw/
-results/deduplicated/
-results/metrics/
+# Resultados corpus A (artefactos, no versionar)
+corpus_a/results/raw/
+corpus_a/results/deduplicated/
+corpus_a/results/metrics/
+corpus_a/results/logs/
+corpus_a/results/_tmp_*/
+
+# Resultados corpus B (artefactos, no versionar)
+corpus_b/results/codeql/
+corpus_b/results/coverity/
+corpus_b/results/metrics/
 
 # IDirs de Coverity (muy pesados)
 **/idir_V/
 **/idir_S/
+**/cov_dir/
 
 # DBs de CodeQL
 **/db_V/
 **/db_S/
+**/db/
 
 # Repos clonados
-/tmp/repos/
-repos/
+corpus_a/tmp/repos/
+/tmp/repos_b/
 
 # Logs locales de ejecucion
-results/logs/
+**/results/logs/
 
 # Python
 __pycache__/

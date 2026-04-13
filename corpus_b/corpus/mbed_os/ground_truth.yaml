@@ -1,0 +1,135 @@
+# =============================================================================
+# GROUND TRUTH — ARMmbed/mbed-os  (Corpus B — EMBOSS Shen et al. ISSTA 2025)
+#
+# Total instancias: 4
+# Evaluables SAST:  4  (structural_fn: false)
+#
+# Fuente: Shen et al. "Finding 709 Defects in 258 Projects" ISSTA 2025
+#   Tabla 5: mbed-os — 32 defectos totales, 22 security, criticality 0.72
+#   Artefactos: https://github.com/purs3lab/ISSTA-2025-EMBOSS-Artifact
+#
+# DISTRIBUCIÓN POR CWE FAMILY:
+#   null-deref:       2  → CWE-476 (cpp/inconsistent-null-check)
+#   buffer-overflow:  1  → CWE-120 (cpp/unbounded-write)
+#   integer-overflow: 1  → CWE-190 (cpp/uncontrolled-allocation-size)
+#
+# NOTA: Todos los commit_vulnerable resueltos con git fetch --depth=2.
+# =============================================================================
+
+project: mbed_os
+repo_url: https://github.com/ARMmbed/mbed-os
+language: C/C++
+build_system: cmake
+compile_commands_generator: "cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug -DMBED_TARGET=DISCO_L475VG_IOT01A && cmake --build build -j$(nproc)"
+corpus_role: contrast
+sast_quality: high
+kloc: 1200
+
+instances:
+
+  # ---------------------------------------------------------------------------
+  # FAMILIA: null-deref (2 instancias)
+  # CWE-476 — cpp/inconsistent-null-check
+  # ---------------------------------------------------------------------------
+
+  - id: MBEDOS-DEFECT-001
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/ARMmbed/mbed-os/pull/15406
+    cwe_id: CWE-476
+    cwe_family: null-deref
+    codeql_query: cpp/inconsistent-null-check
+    severity: error
+    affected_file: connectivity/FEATURE_BLE/libraries/cordio_stack/ble-host/sources/stack/att/att_eatt.c
+    affected_function: eattL2cCocAcceptCback
+    affected_line_approx: 267
+    commit_fix: 1768ad9e5f686e534c751fb4453bc4fd64466e8c
+    commit_vulnerable: b5692fd180ba5448f61618f463270480865711a5
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      eattGetConnCb(connId) return value (pCcb) used without NULL check in BLE
+      EATT stack functions eattL2cCocAcceptCback and eattReqNextChannels.
+      Also SecurityDb::get_distribution_flags() return value unchecked in
+      SecurityManagerImpl.cpp. PR fixes multiple null-deref patterns in BLE stack.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by ARM Mbed maintainers.
+
+  - id: MBEDOS-DEFECT-002
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/ARMmbed/mbed-os/pull/15513
+    cwe_id: CWE-476
+    cwe_family: null-deref
+    codeql_query: cpp/inconsistent-null-check
+    severity: error
+    affected_file: storage/kvstore/securestore/source/SecureStore.cpp
+    affected_function: set_start
+    affected_line_approx: 290
+    commit_fix: e3d2c560e4da2c836dffc902924ba8aaa8948831
+    commit_vulnerable: 5cb118be1b48aa1cd18db1c7769576542152520f
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      _rbp_kv (rollback-protection KV store pointer) used without checking if
+      it is NULL before proceeding to allocate and use memory in set_start().
+      Fix adds NULL check: if (_rbp_kv == nullptr) return MBED_ERROR_NOT_READY.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by ARM Mbed maintainers.
+      commit_vulnerable is the first parent of the merge commit (main before PR was merged).
+
+  # ---------------------------------------------------------------------------
+  # FAMILIA: buffer-overflow (1 instancia)
+  # CWE-120 — cpp/unbounded-write
+  # ---------------------------------------------------------------------------
+
+  - id: MBEDOS-DEFECT-003
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/ARMmbed/mbed-os/pull/15404
+    cwe_id: CWE-120
+    cwe_family: buffer-overflow
+    codeql_query: cpp/unbounded-write
+    severity: error
+    affected_file: connectivity/drivers/cellular/GEMALTO/CINTERION/GEMALTO_CINTERION_CellularStack.cpp
+    affected_function: socket_open_defer
+    affected_line_approx: 186
+    commit_fix: 0ea5decbb9be9a318edf8560d3f34bfd1bd6c78e
+    commit_vulnerable: 9a82ad670cb23fa2114227303c28bdbcc5a34f07
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      std::sprintf(buf, "%d", _cid) writing into a 10-byte buffer; for large
+      integer values (e.g. negative or > 9 digits) the buffer overflows.
+      Fixed with std::snprintf(buf, sizeof(buf), "%d", _cid) and buffer enlarged
+      to 12 bytes to safely accommodate any int value plus null terminator.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by ARM Mbed maintainers.
+
+  # ---------------------------------------------------------------------------
+  # FAMILIA: integer-overflow (1 instancia)
+  # CWE-190 — cpp/uncontrolled-allocation-size
+  # ---------------------------------------------------------------------------
+
+  - id: MBEDOS-DEFECT-004
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/ARMmbed/mbed-os/pull/15177
+    cwe_id: CWE-190
+    cwe_family: integer-overflow
+    codeql_query: cpp/uncontrolled-allocation-size
+    severity: error
+    affected_file: connectivity/lorawan/include/lorawan/LoRaRadio.h
+    affected_function: (struct field — rssi_value)
+    affected_line_approx: 200
+    commit_fix: f609a5234e91cd450021cd52cf0f6aa881fbfedc
+    commit_vulnerable: c08be76aa97e58952479f1553b66223a72dd30f0
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      rssi_value struct field declared as int8_t (range -128..127); RSSI values
+      below -128 dBm (possible in low-signal scenarios) overflow. Changed to
+      int16_t to accommodate the full RSSI dynamic range without overflow.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by ARM Mbed maintainers.
+      commit_vulnerable is the first parent of the merge commit (main before PR was merged).

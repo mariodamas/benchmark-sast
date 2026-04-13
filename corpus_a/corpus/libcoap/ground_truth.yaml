@@ -1,0 +1,62 @@
+# =============================================================================
+# GROUND TRUTH v1 — libcoap (Corpus Contraste)
+# Benchmark SAST: CodeQL vs Coverity vs Unión
+#
+# Total instancias:    1
+# Evaluables SAST:     1  (structural_fn: false)
+# FN estructurales:    0
+#
+# DISTRIBUCIÓN POR CWE FAMILY (evaluables):
+#   null-deref:        1  → CWE-476 (net.c)
+#
+# ADVERTENCIA: CVE-2019-20431 en NVD aparece asociado a Lustre filesystem,
+#   no a libcoap. Se mantiene este ID por consistencia del corpus solicitado,
+#   pero se deja trazabilidad explícita de esta ambigüedad en notes.
+#
+# FUENTES:
+#   ChangeLog: https://github.com/obgm/libcoap/blob/develop/ChangeLog
+#   Release 4.2.1: https://github.com/obgm/libcoap/tree/release-4.2.1
+#
+# commit_verified: true → hash comprobado en el repo público
+#   git -C /tmp/repos/libcoap show --no-patch 4b52182b8d3dc05e82a08d8fb35e8c604a8a181d
+#   git -C /tmp/repos/libcoap rev-parse 4b52182b8d3dc05e82a08d8fb35e8c604a8a181d~1
+# =============================================================================
+
+project: libcoap
+repo_url: https://github.com/obgm/libcoap.git
+language: C
+build_system: autotools
+compile_commands_generator: "./autogen.sh && ./configure --disable-examples && bear -- make"
+corpus_role: contrast
+sast_quality: good
+kloc: 25
+
+instances:
+
+  # ===========================================================================
+  # FAMILIA: null-deref  (1 instancia evaluable)
+  # CWE-476
+  # ===========================================================================
+
+  - id: LIBCOAP-CVE-2019-20431
+    cve_id: CVE-2019-20431
+    cve: CVE-2019-20431
+    cwe: CWE-476
+    cwe_family: null-deref
+    cvss: 7.5
+    description: >
+      Posible null pointer dereference en net.c en la implementación CoAP
+      de libcoap. Un paquete crafteado puede provocar desreferencia de
+      puntero nulo y crash del proceso (DoS) en paths de red.
+    affected_file: src/net.c
+    fix_advisory: "https://github.com/obgm/libcoap/commit/4b52182b8d3dc05e82a08d8fb35e8c604a8a181d"
+    commit_vulnerable: edca08249b8ef180727dc63f549758feb83d69f5  # fix~1
+    commit_fix:        4b52182b8d3dc05e82a08d8fb35e8c604a8a181d
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: >
+      ADVERTENCIA: Existe ambigüedad pública del CVE-2019-20431 para libcoap.
+      Se selecciona una corrección real de CWE-476 en net.c (mensaje de commit:
+      "fix possible NULL pointer dereference") para mantener trazabilidad
+      técnica y reproducibilidad del benchmark.

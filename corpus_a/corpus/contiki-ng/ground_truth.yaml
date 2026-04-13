@@ -1,0 +1,94 @@
+# =============================================================================
+# GROUND TRUTH v1 — Contiki-NG (Corpus Contraste)
+# Benchmark SAST: CodeQL vs Coverity vs Unión
+#
+# Total instancias:    2
+# Evaluables SAST:     2  (structural_fn: false)
+# FN estructurales:    0
+#
+# DISTRIBUCIÓN POR CWE FAMILY (evaluables):
+#   buffer-overflow:   1  → CWE-120 (BLE L2CAP)
+#   oob-read:          1  → CWE-125 (SNMP)
+#
+# NOTA CWE: NVD asigna CWE-125 a CVE-2020-12141 (OOB read en SNMP),
+#   no CWE-476 (null-deref RPL). Verificar si hay CVE adicional en RPL.
+#
+# FUENTES:
+#   NVD: https://nvd.nist.gov/vuln/search?query=contiki-ng
+#   PR:  https://github.com/contiki-ng/contiki-ng/pull/1662
+#   PR:  https://github.com/contiki-ng/contiki-ng/pull/1355
+#
+# commit_verified: true  → hash comprobado en el repo público
+# commit_verified: false → extraído de advisory/PR; verificar con:
+#   git -C /tmp/repos/contiki-ng cat-file -t <hash>
+# =============================================================================
+
+project: contiki-ng
+repo_url: https://github.com/contiki-ng/contiki-ng.git
+language: C
+build_system: make
+compile_commands_generator: "export CONTIKI_WITH_IPV6=1 MODULES='os/net/mac/ble os/net/app-layer/snmp' && make -C examples/hello-world TARGET=native"
+corpus_role: contrast
+sast_quality: good
+kloc: 130
+
+instances:
+
+  # ===========================================================================
+  # FAMILIA: buffer-overflow  (1 instancia evaluable)
+  # CWE-120
+  # ===========================================================================
+
+  - id: CONTIKI-CVE-2020-12140
+    cve_id: CVE-2020-12140
+    cve: CVE-2020-12140
+    cwe: CWE-120
+    cwe_family: buffer-overflow
+    cvss: 8.8
+    description: >
+      Buffer overflow en os/net/mac/ble/ble-l2cap.c en la función
+      input_l2cap_frame_flow_channel(). El campo de longitud del payload
+      no se valida frente a BLE_L2CAP_NODE_MTU, permitiendo escritura
+      fuera de bounds con un frame BLE L2CAP crafteado.
+    affected_file: os/net/mac/ble/ble-l2cap.c
+    fix_pr: "https://github.com/contiki-ng/contiki-ng/pull/1662"
+    commit_vulnerable: e58b5838e4691f18e5838347bbc20da6893d355c  # fix~1
+    commit_fix:        82356e516a91200857f52ed3e9945739cba2c051
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: >
+      Buffer overflow BLE L2CAP. CWE-120 clásico: ausencia de bounds check
+      antes de copia en buffer fijo. Alta cobertura esperada en CodeQL
+      (cpp/overflow-buffer) y Coverity (BUFFER_SIZE_WARNING). Se usa el
+      commit de fix directo en vez del commit de merge del PR.
+
+  # ===========================================================================
+  # FAMILIA: oob-read  (1 instancia evaluable)
+  # CWE-125
+  # ===========================================================================
+
+  - id: CONTIKI-CVE-2020-12141
+    cve_id: CVE-2020-12141
+    cve: CVE-2020-12141
+    cwe: CWE-125
+    cwe_family: buffer-overflow
+    cvss: 6.5
+    description: >
+      Out-of-bounds read en snmp_ber_decode_string_len_buffer() en
+      os/net/app-layer/snmp/snmp-ber.c. Un paquete SNMP crafteado con
+      longitud de string mayor que el buffer disponible provoca lectura
+      fuera de bounds y potencial divulgación de información o DoS en
+      Contiki-NG <= 4.4.
+    affected_file: os/net/app-layer/snmp/snmp-ber.c
+    fix_pr: "https://github.com/contiki-ng/contiki-ng/pull/1355"
+    commit_vulnerable: c61897ab953868db84376016fdf0f6b0a01c240c  # parent del fix
+    commit_fix:        12c824386ab60de757de5001974d73b32e19ad71  # "Refactored SNMP engine after vulnerabilities"
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: >
+      OOB read en stack SNMP. NVD asigna CWE-125, no CWE-476.
+      El fix refactoriza el engine SNMP reemplazando punteros uint32_t*
+      por tipo estructurado snmp_oid_t para eliminar la manipulación
+      insegura de arrays de OID.

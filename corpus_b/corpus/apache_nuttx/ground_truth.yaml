@@ -1,0 +1,154 @@
+# =============================================================================
+# GROUND TRUTH — apache/nuttx  (Corpus B — EMBOSS Shen et al. ISSTA 2025)
+#
+# Total instancias: 5
+# Evaluables SAST:  5  (structural_fn: false)
+#
+# Fuente: Shen et al. "Finding 709 Defects in 258 Projects" ISSTA 2025
+#   Tabla 5: nuttx — 35 defectos totales, 24 security, criticality 0.69
+#   Artefactos: https://github.com/purs3lab/ISSTA-2025-EMBOSS-Artifact
+#
+# DISTRIBUCIÓN POR CWE FAMILY:
+#   null-deref:       2  → CWE-476 (cpp/inconsistent-null-check)
+#   buffer-overflow:  1  → CWE-120 (cpp/unbounded-write)
+#   integer-overflow: 2  → CWE-190 (cpp/uncontrolled-allocation-size)
+#
+# commit_verified: false → hashes obtenidos via GitHub API; verificar con:
+#   git -C /tmp/repos_b/apache_nuttx cat-file -t <hash>
+# =============================================================================
+
+project: apache_nuttx
+repo_url: https://github.com/apache/nuttx
+language: C
+build_system: make
+compile_commands_generator: "make -C . TOPDIR=$(pwd) V=1 BEARING=sim defconfig && bear -- make -j$(nproc)"
+corpus_role: contrast
+sast_quality: high
+kloc: 800
+
+instances:
+
+  # ---------------------------------------------------------------------------
+  # FAMILIA: null-deref (2 instancias)
+  # CWE-476 — cpp/inconsistent-null-check
+  # ---------------------------------------------------------------------------
+
+  - id: NUTTX-DEFECT-001
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/apache/nuttx/pull/18197
+    cwe_id: CWE-476
+    cwe_family: null-deref
+    codeql_query: cpp/inconsistent-null-check
+    severity: error
+    affected_file: sched/sched/sched_mergepending.c
+    affected_function: nxsched_merge_pending
+    affected_line_approx: 96
+    commit_fix: e2aec529cb2382f57b13962fd6c0a51c20648e22
+    commit_vulnerable: 7f167ecc856cfa50bb81a4fcaa411377fac06313
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      rtcb returned by nxsched_remove_readytorun() was used in a loop condition
+      (rtcb->sched_priority) without a preceding NULL guard. Fix adds
+      "rtcb &&" check before the field dereference.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by Apache NuttX maintainers.
+
+  - id: NUTTX-DEFECT-002
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/apache/nuttx/pull/17958
+    cwe_id: CWE-476
+    cwe_family: null-deref
+    codeql_query: cpp/inconsistent-null-check
+    severity: error
+    affected_file: sched/irq/irq_attach_thread.c
+    affected_function: irq_default_handler
+    affected_line_approx: 72
+    commit_fix: e143acfc4642e53b5998f2b2dc617be4c0a48c4f
+    commit_vulnerable: 0e5323370f5faad2b2eba5293e139d574bfac9c7
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      info->handler function pointer called without checking if it was NULL.
+      Two files patched in the same PR: irq_attach_thread.c and irq_attach_wqueue.c.
+      Fix adds NULL guard before calling the handler.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by Apache NuttX maintainers.
+
+  # ---------------------------------------------------------------------------
+  # FAMILIA: integer-overflow (2 instancias)
+  # CWE-190 — cpp/uncontrolled-allocation-size
+  # ---------------------------------------------------------------------------
+
+  - id: NUTTX-DEFECT-003
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/apache/nuttx/pull/15448
+    cwe_id: CWE-190
+    cwe_family: integer-overflow
+    codeql_query: cpp/uncontrolled-allocation-size
+    severity: error
+    affected_file: drivers/sensors/gnss_uorb.c
+    affected_function: gnss_activate
+    affected_line_approx: 168
+    commit_fix: 350f396aa50463f762d1f8df62ef3799a96cac0e
+    commit_vulnerable: 7e0e4dea755939aef750d83c7c3f31f898dc7d7f
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      Integer overflow in crefs counter (uint8_t, max 255). Fix adds boundary
+      check before increment/decrement operations. The overflow could cause
+      incorrect reference counting in sensor activation logic.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by Apache NuttX maintainers.
+
+  - id: NUTTX-DEFECT-004
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/apache/nuttx/pull/15008
+    cwe_id: CWE-190
+    cwe_family: integer-overflow
+    codeql_query: cpp/uncontrolled-allocation-size
+    severity: error
+    affected_file: drivers/video/fb.c
+    affected_function: fb_register_device
+    affected_line_approx: 1732
+    commit_fix: 257339a442c1d346b690b3feb8e96562d8405dd0
+    commit_vulnerable: a0420df332ae392efac9a479647f59074b8af9d6
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      Variable declared as size_t (unsigned) caused integer overflow in
+      indexing/comparison. Fix changes declaration to ssize_t (signed) to
+      prevent overflow at boundary values in framebuffer device registration.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by Apache NuttX maintainers.
+
+  # ---------------------------------------------------------------------------
+  # FAMILIA: buffer-overflow (1 instancia)
+  # CWE-120 — cpp/unbounded-write
+  # ---------------------------------------------------------------------------
+
+  - id: NUTTX-DEFECT-005
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/apache/nuttx/pull/18462
+    cwe_id: CWE-120
+    cwe_family: buffer-overflow
+    codeql_query: cpp/unbounded-write
+    severity: error
+    affected_file: arch/xtensa/src/esp32/esp32_spi.c
+    affected_function: esp32_spi_poll_exchange
+    affected_line_approx: 1104
+    commit_fix: 6cb6c45987253862035641896f87ad0ef52bd929
+    commit_vulnerable: 3582497909a515cdc8222e7872492ab44caead6a
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      SPI poll exchange computed a chunk size from (transfer_size - i) without
+      bounding it to sizeof(uint32_t), causing potential over-read/write into
+      the SPI FIFO buffer. Fix adds explicit bounds check before buffer access.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by Apache NuttX maintainers.

@@ -1,0 +1,146 @@
+# =============================================================================
+# GROUND TRUTH — openlgtv/epk2extract  (Corpus B — EMBOSS Shen et al. ISSTA 2025)
+#
+# Total instancias: 4
+# Evaluables SAST:  4  (structural_fn: false)
+#
+# Fuente: Shen et al. "Finding 709 Defects in 258 Projects" ISSTA 2025
+#   Tabla 5: epk2extract — 29 defectos totales, 27 security, criticality 0.45
+#   Artefactos: https://github.com/purs3lab/ISSTA-2025-EMBOSS-Artifact
+#
+# DISTRIBUCIÓN POR CWE FAMILY:
+#   null-deref:       2  → CWE-476 (cpp/inconsistent-null-check)  [EPK2-003, EPK2-004]
+#   buffer-overflow:  1  → CWE-120 (cpp/unbounded-write)          [EPK2-001]
+#   format-string:    1  → CWE-134 (cpp/missing-check-scanf)      [EPK2-002]
+#
+# NOTA: Todos los commit_vulnerable resueltos con git fetch --depth=2.
+#       EPK2-DEFECT-004 usa PR #75 (Mingjie Shen, ISSTA 2025 co-author) — null-deref
+#       en extract_epk1_file confirmado por CodeQL cpp/inconsistent-null-check.
+# =============================================================================
+
+project: epk2extract
+repo_url: https://github.com/openlgtv/epk2extract
+language: C
+build_system: cmake
+compile_commands_generator: "cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug && cmake --build build -j$(nproc)"
+corpus_role: contrast
+sast_quality: medium
+kloc: 15
+
+instances:
+
+  # ---------------------------------------------------------------------------
+  # FAMILIA: buffer-overflow (2 instancias de PR #112)
+  # CWE-120 — cpp/unbounded-write
+  # ---------------------------------------------------------------------------
+
+  - id: EPK2-DEFECT-001
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/openlgtv/epk2extract/pull/112
+    cwe_id: CWE-120
+    cwe_family: buffer-overflow
+    codeql_query: cpp/unbounded-write
+    severity: error
+    affected_file: src/stream/tsfile.c
+    affected_function: do_unwrap_func
+    affected_line_approx: 34
+    commit_fix: fe7770602010b7e3fa9c93b9acdf1c48bf1a19e2
+    commit_vulnerable: 541fffbaa70f48f153af95e50c8afc0dc9afd911
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      Buffer handling issue in do_unwrap_func() in tsfile.c. The function
+      processes raw TS stream data without adequate bounds checking on the
+      destination buffer. Part of a broader bugfix and general improvements PR.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by epk2extract maintainers.
+
+  # ---------------------------------------------------------------------------
+  # FAMILIA: format-string (1 instancia de PR #112)
+  # CWE-134 — cpp/missing-check-scanf
+  # ---------------------------------------------------------------------------
+
+  - id: EPK2-DEFECT-002
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/openlgtv/epk2extract/pull/112
+    cwe_id: CWE-134
+    cwe_family: format-string
+    codeql_query: cpp/missing-check-scanf
+    severity: warning
+    affected_file: src/stream/tsfile.c
+    affected_function: setKey
+    affected_line_approx: 50
+    commit_fix: fe7770602010b7e3fa9c93b9acdf1c48bf1a19e2
+    commit_vulnerable: 541fffbaa70f48f153af95e50c8afc0dc9afd911
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      Format string issue in setKey() — fprintf(stderr, "...key size=%ld\n",
+      statBuf.st_size) uses %ld for off_t which is wrong on 64-bit platforms
+      (off_t may be 64-bit while long is 32-bit on Windows). Changed to %jd
+      with (intmax_t) cast for portability and correctness.
+      Same PR as EPK2-DEFECT-001 (companion fix in same file).
+      Confirmed in Shen et al. ISSTA 2025. PR merged by epk2extract maintainers.
+
+  # ---------------------------------------------------------------------------
+  # FAMILIA: null-deref (1 instancia de PR #116)
+  # CWE-476 — cpp/inconsistent-null-check
+  # ---------------------------------------------------------------------------
+
+  - id: EPK2-DEFECT-003
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/openlgtv/epk2extract/pull/116
+    cwe_id: CWE-476
+    cwe_family: null-deref
+    codeql_query: cpp/inconsistent-null-check
+    severity: error
+    affected_file: include/common.h
+    affected_function: (option parsing — crash on missing path argument)
+    affected_line_approx: 6
+    commit_fix: 2cb33de412ef5983dcf34c72334ec10f24266aa4
+    commit_vulnerable: fe7770602010b7e3fa9c93b9acdf1c48bf1a19e2
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      Crash when running epk2extract with command-line option(s) but without
+      providing a path argument. NULL pointer dereference in option parsing logic.
+      Fix adds portability macros (LIKELY/UNLIKELY) and FORMAT_PRINTF attribute
+      plus NULL check before path dereference in argument handling.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by epk2extract maintainers.
+      NOTA: Localización exacta requiere verificación en Zenodo SARIF.
+
+  # ---------------------------------------------------------------------------
+  # FAMILIA: null-deref (1 instancia de PR #75)
+  # CWE-476 — cpp/inconsistent-null-check
+  # PR enviado por Mingjie Shen (co-autor del paper ISSTA 2025)
+  # ---------------------------------------------------------------------------
+
+  - id: EPK2-DEFECT-004
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/openlgtv/epk2extract/pull/75
+    cwe_id: CWE-476
+    cwe_family: null-deref
+    codeql_query: cpp/inconsistent-null-check
+    severity: error
+    affected_file: src/epk1.c
+    affected_function: extract_epk1_file
+    affected_line_approx: 112
+    commit_fix: 9d15213b81e6ce4e24e3f36e537fdffd3dafe1f9
+    commit_vulnerable: f5aca59fb67342b7c02469f3e19488f4177b308d
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      malloc() return value not checked in extract_epk1_file(): pakRecord and
+      pheader allocated without NULL guard — if malloc fails, memcpy proceeds
+      with a NULL pointer causing undefined behavior / crash.
+      Fix adds NULL checks after each malloc() call with err_exit on failure.
+      PR #75 submitted by Mingjie Shen (Purdue, ISSTA 2025 co-author); branch
+      explicitly named 'cpp/inconsistent-null-check' confirming CodeQL detection.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by epk2extract maintainers.

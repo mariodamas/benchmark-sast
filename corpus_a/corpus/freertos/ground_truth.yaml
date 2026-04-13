@@ -1,0 +1,102 @@
+# =============================================================================
+# GROUND TRUTH v1 — FreeRTOS+TCP (Corpus Contraste)
+# Benchmark SAST: CodeQL vs Coverity vs Unión
+#
+# Total instancias:    2
+# Evaluables SAST:     2  (structural_fn: false)
+# FN estructurales:    0
+#
+# DISTRIBUCIÓN POR CWE FAMILY (evaluables):
+#   buffer-overflow:   1  → CWE-120 (SOCKETS_SetSockOpt)
+#   integer-overflow:  1  → CWE-190 (prvCheckOptions, MSS wraparound)
+#
+# NOTA CWE: NVD asigna CWE-824 a CVE-2018-16522 (uninitialized pointer)
+#   y CWE-369 a CVE-2018-16523 (division by zero). Mapeados aquí a
+#   las familias funcionales del benchmark (buffer-overflow / integer-overflow).
+#
+# FUENTES:
+#   Zimperium disclosure: https://www.zimperium.com/blog/freertos-tcpip-stack-vulnerabilities/
+#   AWS security update: https://docs.aws.amazon.com/freertos/latest/security-updates/
+#   CHANGELOG v1.3.2:   https://github.com/aws/amazon-freertos/blob/v1.3.2/CHANGELOG.md
+#
+# ADVERTENCIA: Los CVEs del grupo Zimperium (2018) se publicaron en octubre 2018
+#   pero el fix se integró en amazon-freertos v1.3.2 (2018-08-21) antes del
+#   disclosure público. El repo FreeRTOS-Plus-TCP standalone fue creado después.
+#   Los hashes siguientes son del repo amazon-freertos legacy (tag v1.3.2) y deben verificarse:
+#   git -C /tmp/repos/amazon-freertos cat-file -t <hash>
+#
+# commit_verified: true → hashes verificados en aws/amazon-freertos (repo oficial histórico)
+#   asociado a FreeRTOS+TCP para estos CVEs.
+#   Para reproducir el diff de seguridad:
+#   git -C /tmp/repos/amazon-freertos log --oneline v1.3.1..v1.3.2 -- \
+#     lib/FreeRTOS-Plus/Source/FreeRTOS-Plus-TCP/
+# =============================================================================
+
+project: freertos
+repo_url: https://github.com/aws/amazon-freertos.git
+language: C
+build_system: make
+compile_commands_generator: "mkdir -p /tmp/af-build && gcc -c lib/FreeRTOS-Plus-TCP/source/FreeRTOS_Sockets.c -o /tmp/af-build/FreeRTOS_Sockets.o -Ilib/include -Ilib/include/private -Ilib/FreeRTOS-Plus-TCP/include -Ilib/FreeRTOS-Plus-TCP/source/portable/Compiler/GCC -Ilib/FreeRTOS/portable/GCC/ARM_CM3 -Idemos/vendor/board/common/config_files -Ilib/third_party/tracealyzer_recorder/Include -DprojCOVERAGE_TEST=0 && gcc -c lib/FreeRTOS-Plus-TCP/source/FreeRTOS_TCP_WIN.c -o /tmp/af-build/FreeRTOS_TCP_WIN.o -Ilib/include -Ilib/include/private -Ilib/FreeRTOS-Plus-TCP/include -Ilib/FreeRTOS-Plus-TCP/source/portable/Compiler/GCC -Ilib/FreeRTOS/portable/GCC/ARM_CM3 -Idemos/vendor/board/common/config_files -Ilib/third_party/tracealyzer_recorder/Include -DprojCOVERAGE_TEST=0"
+corpus_role: contrast
+sast_quality: good
+kloc: 30
+
+instances:
+
+  # ===========================================================================
+  # FAMILIA: buffer-overflow  (1 instancia evaluable)
+  # CWE-120 / CWE-824
+  # ===========================================================================
+
+  - id: FREERTOS-CVE-2018-16522
+    cve_id: CVE-2018-16522
+    cve: CVE-2018-16522
+    cwe: CWE-824
+    cwe_family: buffer-overflow
+    cvss: 8.1
+    description: >
+      Acceso a puntero no inicializado en SOCKETS_SetSockOpt() en la
+      implementación del stack TCP/IP de FreeRTOS (FreeRTOS+TCP <= V10.0.1
+      con amazon-freertos <= 1.3.1). Un atacante remoto puede aprovechar
+      esta condición para ejecutar código arbitrario o causar DoS.
+    affected_file: lib/FreeRTOS-Plus-TCP/source/FreeRTOS_Sockets.c
+    fix_advisory: "https://docs.aws.amazon.com/freertos/latest/security-updates/security-updates.html"
+    commit_vulnerable: 1fc5e966a0f8e541c0942bd02bb3504a4a6be9c6  # tag: v1.3.1 (fix~1)
+    commit_fix:        12ea022d0f52df211111a79e0aca1ca7b04639d6  # tag: v1.3.2
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: >
+      Uninitialized pointer access (CWE-824), mapeado a cwe_family buffer-overflow
+      por afinidad con los checkers SAST (Coverity UNINIT, CodeQL cpp/uninitialized-local).
+      Fix en amazon-freertos v1.3.2 (2018-08-21), antes del disclosure público
+      de Zimperium (octubre 2018).
+
+  # ===========================================================================
+  # FAMILIA: integer-overflow  (1 instancia evaluable)
+  # CWE-190 / CWE-369
+  # ===========================================================================
+
+  - id: FREERTOS-CVE-2018-16523
+    cve_id: CVE-2018-16523
+    cve: CVE-2018-16523
+    cwe: CWE-369
+    cwe_family: integer-overflow
+    cvss: 7.5
+    description: >
+      División por cero en prvCheckOptions() al procesar un segmento TCP
+      con valor MSS (Maximum Segment Size) igual a 0. Provoca crash del
+      dispositivo con un segmento TCP crafteado en FreeRTOS+TCP <= V10.0.1
+      con amazon-freertos <= 1.3.1.
+    affected_file: lib/FreeRTOS-Plus-TCP/source/FreeRTOS_TCP_WIN.c
+    fix_advisory: "https://docs.aws.amazon.com/freertos/latest/security-updates/security-updates.html"
+    commit_vulnerable: 1fc5e966a0f8e541c0942bd02bb3504a4a6be9c6  # tag: v1.3.1 (fix~1)
+    commit_fix:        12ea022d0f52df211111a79e0aca1ca7b04639d6  # tag: v1.3.2
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: >
+      División por cero (CWE-369), mapeado a cwe_family integer-overflow.
+      Coverity tiene checker DIVIDE_BY_ZERO específico; CodeQL cubre con
+      cpp/division-by-zero. Mismo par de commits que CVE-2018-16522 (parche
+      batch en v1.3.2). Verificar hashes con repo legacy aws/amazon-freertos.

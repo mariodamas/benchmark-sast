@@ -1,0 +1,170 @@
+# =============================================================================
+# GROUND TRUTH — raysan5/raylib  (Corpus B — EMBOSS Shen et al. ISSTA 2025)
+#
+# Total instancias: 6
+# Evaluables SAST:  6  (structural_fn: false)
+#
+# Fuente: Shen et al. "Finding 709 Defects in 258 Projects" ISSTA 2025
+#   Tabla 5: raylib — 33 defectos totales, 33 security, criticality 0.70
+#   Artefactos: https://github.com/purs3lab/ISSTA-2025-EMBOSS-Artifact
+#
+# DISTRIBUCIÓN POR CWE FAMILY:
+#   buffer-overflow:  4  → CWE-120 (cpp/unbounded-write)
+#   integer-overflow: 2  → CWE-190 (cpp/uncontrolled-allocation-size)
+#
+# NOTA: Todos los commit_vulnerable resueltos con git fetch --depth=2.
+# =============================================================================
+
+project: raylib
+repo_url: https://github.com/raysan5/raylib
+language: C
+build_system: cmake
+compile_commands_generator: "cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug && cmake --build build -j$(nproc)"
+corpus_role: contrast
+sast_quality: high
+kloc: 120
+
+instances:
+
+  # ---------------------------------------------------------------------------
+  # FAMILIA: buffer-overflow (4 instancias)
+  # CWE-120 — cpp/unbounded-write
+  # ---------------------------------------------------------------------------
+
+  - id: RAYLIB-DEFECT-001
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/raysan5/raylib/pull/5382
+    cwe_id: CWE-120
+    cwe_family: buffer-overflow
+    codeql_query: cpp/unbounded-write
+    severity: error
+    affected_file: src/rcore.c
+    affected_function: TextFormat
+    affected_line_approx: 4313
+    commit_fix: 944567651ca7e3f43ff758a1326da481bc9d07a7
+    commit_vulnerable: 1bbc8682f47b996b363d40f5692dc73765145f4f
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      sprintf(truncBuffer, "...") writing to a 4-byte buffer with no size limit.
+      Replaced with snprintf(truncBuffer, 4, "..."). Two files affected in same PR
+      (rcore.c, rtext.c); primary defect in TextFormat in rcore.c.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by raylib maintainers.
+
+  - id: RAYLIB-DEFECT-002
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/raysan5/raylib/pull/4833
+    cwe_id: CWE-120
+    cwe_family: buffer-overflow
+    codeql_query: cpp/unbounded-write
+    severity: error
+    affected_file: src/rcore.c
+    affected_function: ScanDirectoryFiles
+    affected_line_approx: 3688
+    commit_fix: 654d5c80c23af3b8c21c59c4dbb0197bb7e3c08b
+    commit_vulnerable: a0318e67aaec38f8ec7881ba6c913d068e20206b
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      sprintf(path, "%s/%s", basePath, dp->d_name) during directory scan into
+      a fixed-size path buffer. Replaced with snprintf to prevent overflow when
+      basePath + d_name exceeds buffer capacity.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by raylib maintainers.
+
+  - id: RAYLIB-DEFECT-003
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/raysan5/raylib/pull/5091
+    cwe_id: CWE-120
+    cwe_family: buffer-overflow
+    codeql_query: cpp/unbounded-write
+    severity: error
+    affected_file: src/external/jar_mod.h
+    affected_function: jar_mod_load
+    affected_line_approx: 1130
+    commit_fix: 881c68e323430b9de198066cdae1aac5345a39f5
+    commit_vulnerable: ca61b8d55579dac6ce3a23ca41de7add1df2d5df
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      memcpy(&(modctx->song.title), modmemory, 1084) copies 1084 bytes into a
+      field smaller than 1084 bytes. Fixed to memcpy(&(modctx->song), ...) to
+      target the entire struct, preventing heap buffer overflow in MOD file loader.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by raylib maintainers.
+
+  - id: RAYLIB-DEFECT-004
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/raysan5/raylib/pull/4635
+    cwe_id: CWE-476
+    cwe_family: null-deref
+    codeql_query: cpp/inconsistent-null-check
+    severity: error
+    affected_file: src/rmodels.c
+    affected_function: UpdateModelAnimation
+    affected_line_approx: 2350
+    commit_fix: a7686c47b35fb62e8c9041240060622e5b89b9f6
+    commit_vulnerable: 7868d600f40b80177add61e9b865f66405fd77f3
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      mesh.boneWeights and mesh.boneIds used without NULL check in animation
+      update loop. mesh.animNormals used inside a block that only checks
+      mesh.normals != NULL, missing a check for animNormals itself.
+      Fix adds explicit NULL guards before dereferencing animation mesh fields.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by raylib maintainers.
+
+  # ---------------------------------------------------------------------------
+  # FAMILIA: integer-overflow (2 instancias)
+  # CWE-190 — cpp/uncontrolled-allocation-size
+  # ---------------------------------------------------------------------------
+
+  - id: RAYLIB-DEFECT-005
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/raysan5/raylib/pull/4539
+    cwe_id: CWE-190
+    cwe_family: integer-overflow
+    codeql_query: cpp/uncontrolled-allocation-size
+    severity: error
+    affected_file: src/raudio.c
+    affected_function: LoadWaveFromMemory
+    affected_line_approx: 801
+    commit_fix: 58fe34d9cc2dd1929efb864e5222f25253c4ad89
+    commit_vulnerable: cd16c9ea91f67c82821ecfb480acea247b42a8d5
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      wave.frameCount * wave.channels * sizeof(short) — integer overflow in
+      multiplication before RL_MALLOC. Fixed with explicit (size_t) cast to force
+      64-bit arithmetic and prevent allocation size overflow on 32-bit platforms.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by raylib maintainers.
+
+  - id: RAYLIB-DEFECT-006
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/raysan5/raylib/pull/5037
+    cwe_id: CWE-190
+    cwe_family: integer-overflow
+    codeql_query: cpp/uncontrolled-allocation-size
+    severity: error
+    affected_file: src/rtextures.c
+    affected_function: ImageBlurGaussian
+    affected_line_approx: 2217
+    commit_fix: 20a07a65d7b5625f9d165d2659cfc06bd67116a4
+    commit_vulnerable: 55a567471433dc60d92cb06f530d09ede97190c3
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      (unsigned char)(float/alpha) — floating-point division result could exceed
+      255, causing integer overflow when cast to unsigned char in image processing.
+      Fixed with fminf(..., 255.0) before the cast to clamp the value.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by raylib maintainers.

@@ -54,6 +54,7 @@ CODEQL_QUERY_PACKS = [
     "codeql/cpp-queries:Security/CWE/CWE-120",   # Classic Buffer Overflow
     "codeql/cpp-queries:Security/CWE/CWE-121",   # Stack-based Buffer Overflow
     "codeql/cpp-queries:Security/CWE/CWE-190",   # Integer Overflow
+    "codeql/cpp-queries:Security/CWE/CWE-476",   # NULL Pointer Dereference
     "codeql/cpp-queries:Security/CWE/CWE-416",   # Use After Free
 ]
 DB_RAM_MB = 4096  # RAM máxima para la BD CodeQL
@@ -89,7 +90,16 @@ def run_cmd(cmd: list[str], cwd: str = None, dry_run: bool = False) -> subproces
     if dry_run:
         print(f"[DRY-RUN] {cmd_str}")
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+    env = os.environ.copy()
+    # Evita bloqueos por prompts interactivos (por ejemplo submódulos privados/legacy).
+    env.setdefault("GIT_TERMINAL_PROMPT", "0")
+    # Asegura herramientas instaladas en Linuxbrew para builds legacy (autoconf/libtool).
+    brew_bin = "/home/linuxbrew/.linuxbrew/bin"
+    brew_sbin = "/home/linuxbrew/.linuxbrew/sbin"
+    current_path = env.get("PATH", "")
+    path_parts = [p for p in [brew_bin, brew_sbin, current_path] if p]
+    env["PATH"] = ":".join(path_parts)
+    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, env=env)
     if result.returncode != 0:
         log.error(f"STDERR: {result.stderr[:2000]}")
     return result
@@ -143,7 +153,92 @@ def git_checkout(repo_path: str, commit: str, dry_run: bool = False):
         dry_run=dry_run,
     )
     if submodule_sync.returncode != 0 or submodule_update.returncode != 0:
-        raise RuntimeError("git submodule update falló")
+        # Fallback para submódulos legacy de libcoap (tinydtls en git.eclipse.org).
+        _apply_legacy_submodule_fallback(repo_path, dry_run)
+        submodule_sync_retry = run_cmd(["git", "submodule", "sync", "--recursive"], cwd=repo_path, dry_run=dry_run)
+        submodule_update_retry = run_cmd(
+            ["git", "submodule", "update", "--init", "--recursive"],
+            cwd=repo_path,
+            dry_run=dry_run,
+        )
+        if submodule_sync_retry.returncode != 0 or submodule_update_retry.returncode != 0:
+            log.warning("git submodule update falló; continuando sin submódulos")
+
+
+def _apply_legacy_submodule_fallback(repo_path: str, dry_run: bool = False):
+    """Reescribe URLs de submódulos obsoletas para mejorar compatibilidad histórica."""
+    gitmodules = Path(repo_path) / ".gitmodules"
+    if not gitmodules.exists():
+        return
+
+    # libcoap antiguo apunta a git.eclipse.org, actualmente redirigido.
+    if not dry_run:
+        txt = gitmodules.read_text()
+        txt = txt.replace(
+            "https://git.eclipse.org/r/tinydtls/org.eclipse.tinydtls",
+            "https://github.com/eclipse-tinydtls/org.eclipse.tinydtls.git",
+        )
+        txt = txt.replace(
+            "https://git.eclipse.org/r/tinydtls/org.eclipse.tinydtls.git",
+            "https://github.com/eclipse-tinydtls/org.eclipse.tinydtls.git",
+        )
+        txt = txt.replace(
+            "https://git.eclipse.org/tinydtls/org.eclipse.tinydtls",
+            "https://github.com/eclipse-tinydtls/org.eclipse.tinydtls.git",
+        )
+        txt = txt.replace(
+            "https://git.eclipse.org/tinydtls/org.eclipse.tinydtls.git",
+            "https://github.com/eclipse-tinydtls/org.eclipse.tinydtls.git",
+        )
+        gitmodules.write_text(txt)
+
+    run_cmd(
+        [
+            "git", "submodule", "set-url",
+            "ext/tinydtls",
+            "https://github.com/eclipse-tinydtls/org.eclipse.tinydtls.git",
+        ],
+        cwd=repo_path,
+        dry_run=dry_run,
+    )
+
+    # Reescritura global por si algún commit trae URL antigua en caché local.
+    run_cmd(
+        [
+            "git", "config", "--local",
+            "url.https://github.com/eclipse-tinydtls/org.eclipse.tinydtls.git.insteadOf",
+            "https://git.eclipse.org/r/tinydtls/org.eclipse.tinydtls",
+        ],
+        cwd=repo_path,
+        dry_run=dry_run,
+    )
+    run_cmd(
+        [
+            "git", "config", "--local",
+            "url.https://github.com/eclipse-tinydtls/org.eclipse.tinydtls.git.insteadOf",
+            "https://git.eclipse.org/r/tinydtls/org.eclipse.tinydtls.git",
+        ],
+        cwd=repo_path,
+        dry_run=dry_run,
+    )
+    run_cmd(
+        [
+            "git", "config", "--local",
+            "url.https://github.com/eclipse-tinydtls/org.eclipse.tinydtls.git.insteadOf",
+            "https://git.eclipse.org/tinydtls/org.eclipse.tinydtls",
+        ],
+        cwd=repo_path,
+        dry_run=dry_run,
+    )
+    run_cmd(
+        [
+            "git", "config", "--local",
+            "url.https://github.com/eclipse-tinydtls/org.eclipse.tinydtls.git.insteadOf",
+            "https://git.eclipse.org/tinydtls/org.eclipse.tinydtls.git",
+        ],
+        cwd=repo_path,
+        dry_run=dry_run,
+    )
 
 
 def generate_compile_commands(repo_path: str, build_cmd: str, dry_run: bool = False) -> bool:
@@ -156,13 +251,7 @@ def generate_compile_commands(repo_path: str, build_cmd: str, dry_run: bool = Fa
     build_dir.mkdir(exist_ok=True)
 
     if "cmake" in build_cmd:
-        cfg = run_cmd([
-            "cmake",
-            "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
-            "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-            "..",
-        ],
-                      cwd=str(build_dir), dry_run=dry_run)
+        cfg = run_cmd(["bash", "-lc", build_cmd], cwd=str(build_dir), dry_run=dry_run)
         if cfg.returncode != 0:
             return False
         # Enlace simbólico para que CodeQL encuentre compile_commands.json en la raíz
@@ -209,70 +298,113 @@ def generate_compile_commands(repo_path: str, build_cmd: str, dry_run: bool = Fa
 
         # Algunos corpus definen pipelines con && (ej. autoreconf && configure && bear -- make).
         # Esos comandos requieren shell para preservarse correctamente.
-            is_shell_cmd = any(op in normalized_build_cmd for op in ["&&", "||", ";", "|"])
-            if is_shell_cmd:
-                build = run_cmd(["bash", "-lc", normalized_build_cmd], cwd=repo_path, dry_run=dry_run)
+        is_shell_cmd = any(op in normalized_build_cmd for op in ["&&", "||", ";", "|"])
+        if is_shell_cmd:
+            build = run_cmd(["bash", "-lc", normalized_build_cmd], cwd=repo_path, dry_run=dry_run)
         else:
             build = run_cmd(shlex.split(normalized_build_cmd), cwd=repo_path, dry_run=dry_run)
-            if build.returncode != 0:
-                # Fallback para commits antiguos que fallan con GCC moderno por
-                # -Werror=misleading-indentation (wolfSSL v4.x en este corpus).
-                if (not dry_run) and ("misleading-indentation" in (build.stderr or "")):
-                    log.warning("Build falló por -Werror=misleading-indentation; reintentando con CFLAGS compatibles")
-                    if is_shell_cmd:
-                        retry_cmd = f'CFLAGS="-Wno-error=misleading-indentation" {normalized_build_cmd}'
-                        build_retry = run_cmd(["bash", "-lc", retry_cmd], cwd=repo_path, dry_run=dry_run)
-                    else:
-                        retry_argv = shlex.split(normalized_build_cmd)
-                        build_retry = run_cmd(["env", "CFLAGS=-Wno-error=misleading-indentation", *retry_argv], cwd=repo_path, dry_run=dry_run)
 
-                    build = build_retry
-
-            # Algunos árboles generan compile_commands.json aunque make termine con
-            # código distinto de 0 (p. ej. por targets opcionales/tests). Si el
-            # archivo existe y no está vacío, permitir continuar.
-            if build.returncode != 0:
-                cc = Path(repo_path) / "compile_commands.json"
-                if not dry_run and cc.exists() and cc.stat().st_size > 2:
-                    log.warning("Build devolvió error, pero compile_commands.json fue generado; continuando")
+        if build.returncode != 0:
+            # Fallback para commits antiguos que fallan con GCC moderno por
+            # -Werror=misleading-indentation (wolfSSL v4.x en este corpus).
+            if (not dry_run) and ("misleading-indentation" in (build.stderr or "")):
+                log.warning("Build falló por -Werror=misleading-indentation; reintentando con CFLAGS compatibles")
+                if is_shell_cmd:
+                    retry_cmd = f'CFLAGS="-Wno-error=misleading-indentation" {normalized_build_cmd}'
+                    build_retry = run_cmd(["bash", "-lc", retry_cmd], cwd=repo_path, dry_run=dry_run)
                 else:
-                    return False
+                    retry_argv = shlex.split(normalized_build_cmd)
+                    build_retry = run_cmd(["env", "CFLAGS=-Wno-error=misleading-indentation", *retry_argv], cwd=repo_path, dry_run=dry_run)
+
+                build = build_retry
+
+        # Algunos árboles generan compile_commands.json aunque make termine con
+        # código distinto de 0 (p. ej. por targets opcionales/tests). Si el
+        # archivo existe y no está vacío, permitir continuar.
+        if build.returncode != 0:
+            cc = Path(repo_path) / "compile_commands.json"
+            if not dry_run and cc.exists() and cc.stat().st_size > 2:
+                log.warning("Build devolvió error, pero compile_commands.json fue generado; continuando")
+            else:
+                return False
 
         if not dry_run and not (Path(repo_path) / "compile_commands.json").exists():
             log.error("No se generó compile_commands.json tras el build con bear")
             return False
+    elif build_cmd.strip().startswith("make"):
+        # En proyectos make puros no siempre se usa bear; si no está disponible,
+        # dejamos que CodeQL compile con --command en la fase de creación de DB.
+        if shutil.which("bear") is not None:
+            bear_cmd = f"bear -- {build_cmd}"
+            build = run_cmd(["bash", "-lc", bear_cmd], cwd=repo_path, dry_run=dry_run)
+            if build.returncode != 0:
+                return False
+            if not dry_run and not (Path(repo_path) / "compile_commands.json").exists():
+                return False
+            return True
+
+        log.warning(f"No hay 'bear' disponible; se usará --command para build: {build_cmd}")
+        return True
     else:
-        log.warning(f"Build command no reconocido: {build_cmd}")
-        return False
+        log.warning(f"Build command no reconocido para compile_commands: {build_cmd}")
+        log.warning("Se intentará continuar usando --command en CodeQL database create")
+        return True
     return True
 
 
 def create_codeql_db(
     codeql_bin: str, repo_path: str, db_path: str,
-    threads: int, dry_run: bool = False
+    build_cmd: str, threads: int, dry_run: bool = False
 ) -> bool:
     """Crea la base de datos CodeQL para C/C++."""
-    if Path(db_path).exists():
-        shutil.rmtree(db_path, ignore_errors=True)
+    db_path_abs = Path(db_path).resolve()
+    db_path_abs.parent.mkdir(parents=True, exist_ok=True)
+    if db_path_abs.exists():
+        shutil.rmtree(db_path_abs, ignore_errors=True)
 
     cmd = [
         codeql_bin, "database", "create",
-        db_path,
+        str(db_path_abs),
         "--language=cpp",
         f"--source-root={repo_path}",
         f"--threads={threads}",
         f"--ram={DB_RAM_MB}",
         "--overwrite",
-        # El build command se infiere de compile_commands.json cuando existe
-        "--build-mode=none" if (Path(repo_path) / "compile_commands.json").exists()
-                            else f"--command=make -j{threads}",
     ]
+    if (Path(repo_path) / "compile_commands.json").exists():
+        cmd.append("--build-mode=none")
+    else:
+        shell_ops = ["&&", "||", ";", "|"]
+        needs_shell = any(op in build_cmd for op in shell_ops)
+        command_arg = build_cmd
+        if needs_shell:
+            command_arg = _materialize_build_script(repo_path, build_cmd, dry_run)
+
+        cmd.extend(["--command", command_arg])
+
     result = run_cmd(cmd, cwd=repo_path, dry_run=dry_run)
     if result.returncode != 0:
-        log.error(f"Error creando DB CodeQL en {db_path}")
+        log.error(f"Error creando DB CodeQL en {db_path_abs}")
         return False
-    log.info(f"DB CodeQL creada: {db_path}")
+    log.info(f"DB CodeQL creada: {db_path_abs}")
     return True
+
+
+def _materialize_build_script(repo_path: str, build_cmd: str, dry_run: bool) -> str:
+    """Materializa comandos shell complejos en un script para evitar problemas de quoting."""
+    script_rel = ".codeql_build_command.sh"
+    script_path = Path(repo_path) / script_rel
+    if not dry_run:
+        brew_path_prefix = "/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin"
+        script_path.write_text(
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            f"export PATH={brew_path_prefix}:$PATH\n"
+            f"{build_cmd}\n",
+            encoding="utf-8",
+        )
+        script_path.chmod(0o755)
+    return f"./{script_rel}"
 
 
 def run_codeql_analysis(
@@ -333,7 +465,11 @@ def process_instance(
         return
 
     build_cmd = gt.get("compile_commands_generator", "cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..")
-    inst_dir = Path(output_dir) / cve_id
+    effective_build_cmd = build_cmd
+    if "bear --" in build_cmd and shutil.which("bear") is None:
+        effective_build_cmd = build_cmd.replace("bear --", "", 1).strip()
+        log.warning("'bear' no disponible; usando build command sin bear para la compilacion")
+    inst_dir = Path(output_dir).resolve() / cve_id
     inst_dir.mkdir(parents=True, exist_ok=True)
 
     for version_label, commit in [
@@ -345,6 +481,7 @@ def process_instance(
 
         if skip_existing and Path(sarif_out).exists():
             log.info(f"  [{version_label}] Ya existe, saltando: {sarif_out}")
+            _clear_error_marker(inst_dir, version_label)
             continue
 
         log.info(f"  [{version_label}] Checkout → {commit[:12]}")
@@ -356,14 +493,14 @@ def process_instance(
             continue
 
         log.info(f"  [{version_label}] Generando compile_commands.json")
-        if not generate_compile_commands(repo_path, build_cmd, dry_run):
+        if not generate_compile_commands(repo_path, effective_build_cmd, dry_run):
             log.error(f"  [{version_label}] FALLO generando compile_commands.json")
             _write_error_marker(inst_dir, cve_id, version_label, "compile_commands_failed")
             continue
 
         db_path = str(inst_dir / f"db_{version_label}")
         log.info(f"  [{version_label}] Creando DB CodeQL")
-        ok = create_codeql_db(codeql_bin, repo_path, db_path, threads, dry_run)
+        ok = create_codeql_db(codeql_bin, repo_path, db_path, effective_build_cmd, threads, dry_run)
         if not ok:
             log.error(f"  [{version_label}] FALLO en DB — instancia marcada como ERROR")
             _write_error_marker(inst_dir, cve_id, version_label, "db_creation_failed")
@@ -374,6 +511,8 @@ def process_instance(
         if not ok:
             _write_error_marker(inst_dir, cve_id, version_label, "analysis_failed")
             continue
+
+        _clear_error_marker(inst_dir, version_label)
 
         # Metadatos de la instancia para el evaluador
         meta = {
@@ -411,6 +550,12 @@ def _write_structural_fn_marker(output_dir: str, cve_id: str, instance: dict):
 def _write_error_marker(inst_dir: Path, cve_id: str, version: str, reason: str):
     with open(inst_dir / f"{version}.error.json", "w") as f:
         json.dump({"cve": cve_id, "version": version, "error": reason}, f, indent=2)
+
+
+def _clear_error_marker(inst_dir: Path, version: str):
+    marker = inst_dir / f"{version}.error.json"
+    if marker.exists():
+        marker.unlink()
 
 
 def main():

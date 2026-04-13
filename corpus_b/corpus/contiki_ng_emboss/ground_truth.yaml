@@ -1,0 +1,151 @@
+# =============================================================================
+# GROUND TRUTH — contiki-ng/contiki-ng  (Corpus B — EMBOSS Shen et al. ISSTA 2025)
+#
+# Total instancias: 5
+# Evaluables SAST:  5  (structural_fn: false)
+#
+# Fuente: Shen et al. "Finding 709 Defects in 258 Projects" ISSTA 2025
+#   Tabla 5: contiki-ng — 34 defectos totales, 24 security, criticality 0.67
+#   Artefactos: https://github.com/purs3lab/ISSTA-2025-EMBOSS-Artifact
+#
+# DISTRIBUCIÓN POR CWE FAMILY:
+#   null-deref:       3  → CWE-476 (cpp/inconsistent-null-check)
+#   buffer-overflow:  2  → CWE-120 (cpp/unbounded-write)
+#
+# NOTA: Este es el segundo corpus de contiki-ng (el primero en corpus/ usa CVEs).
+#       Los defectos aquí son distintos — encontrados por CodeQL en el paper EMBOSS.
+# =============================================================================
+
+project: contiki_ng_emboss
+repo_url: https://github.com/contiki-ng/contiki-ng
+language: C
+build_system: make
+compile_commands_generator: "bear -- make -C examples/hello-world TARGET=native MODULES='os/net/ipv6 os/net/routing os/net/mac os/net/mac/ble'"
+corpus_role: contrast
+sast_quality: high
+kloc: 150
+
+instances:
+
+  # ---------------------------------------------------------------------------
+  # FAMILIA: null-deref (3 instancias)
+  # CWE-476 — cpp/inconsistent-null-check
+  # ---------------------------------------------------------------------------
+
+  - id: CONTIKI-DEFECT-001
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/contiki-ng/contiki-ng/pull/2477
+    cwe_id: CWE-476
+    cwe_family: null-deref
+    codeql_query: cpp/inconsistent-null-check
+    severity: error
+    affected_file: os/net/app-layer/coap/coap-uip.c
+    affected_function: coap_engine
+    affected_line_approx: 416
+    commit_fix: a2d86282c9d9bdd45d94149b32e0aa1dadec232b
+    commit_vulnerable: d8fd10484cc12a386e64ac6e3f19620bd6821709
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      Multiple RPL/CoAP/ESMRF network processes called udp_new(), rpl_get_any_dag(),
+      rpl_get_instance() without checking return values for NULL before dereferencing.
+      PR fixes 4 files: coap-uip.c, esmrf.c, rpl-dag-root.c, rpl-icmp6.c.
+      Primary affected function is coap_engine PROCESS_THREAD in coap-uip.c.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by Contiki-NG maintainers.
+
+  - id: CONTIKI-DEFECT-002
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/contiki-ng/contiki-ng/pull/2478
+    cwe_id: CWE-476
+    cwe_family: null-deref
+    codeql_query: cpp/inconsistent-null-check
+    severity: error
+    affected_file: os/net/app-layer/snmp/snmp.c
+    affected_function: snmp_process
+    affected_line_approx: 72
+    commit_fix: d8fd10484cc12a386e64ac6e3f19620bd6821709
+    commit_vulnerable: 55732f8163063c9be006febad94788763dba2fb0
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      Same pattern as CONTIKI-DEFECT-001: udp_new() return value used without
+      NULL check in multiple files (trickle-library.c, snmp.c, resolv.c).
+      Primary defect in snmp_process PROCESS_THREAD in snmp.c.
+      Companion PR to #2477 fixing the same query pattern in different modules.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by Contiki-NG maintainers.
+
+  - id: CONTIKI-DEFECT-003
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/contiki-ng/contiki-ng/pull/2253
+    cwe_id: CWE-476
+    cwe_family: null-deref
+    codeql_query: cpp/inconsistent-null-check
+    severity: error
+    affected_file: os/net/mac/ble/ble-l2cap.c
+    affected_function: input_l2cap_credit
+    affected_line_approx: 378
+    commit_fix: 77898af8488c063a84d6b8338b24fdd4812b9e66
+    commit_vulnerable: 506f9def7cdff853fa24cf6d88e1f4e5619dc46c
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      get_channel_for_addr() in input_l2cap_credit() can return NULL;
+      return value was used directly without a NULL check.
+      Fix adds explicit NULL guard before the channel pointer is dereferenced.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by Contiki-NG maintainers.
+
+  # ---------------------------------------------------------------------------
+  # FAMILIA: buffer-overflow (2 instancias)
+  # CWE-120 — cpp/unbounded-write
+  # ---------------------------------------------------------------------------
+
+  - id: CONTIKI-DEFECT-004
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/contiki-ng/contiki-ng/pull/1662
+    cwe_id: CWE-120
+    cwe_family: buffer-overflow
+    codeql_query: cpp/unbounded-write
+    severity: error
+    affected_file: os/net/mac/ble/ble-l2cap.c
+    affected_function: input_l2cap_frame_flow_channel
+    affected_line_approx: 422
+    commit_fix: ea66afaa5777193494331d78d2570f954507ba92
+    commit_vulnerable: 522677e7150b24de89b450b42fc1c5cbed2ce385
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      payload_len = frame_len - 2 was not bounded against BLE_L2CAP_NODE_MTU
+      before being used as copy size into a fixed-size buffer.
+      Fix adds explicit bounds check: if payload_len > BLE_L2CAP_NODE_MTU before copy.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by Contiki-NG maintainers.
+
+  - id: CONTIKI-DEFECT-005
+    source: shen_et_al_issta_2025
+    confirmed_by: pr_merged
+    pr_url: https://github.com/contiki-ng/contiki-ng/pull/2398
+    cwe_id: CWE-120
+    cwe_family: buffer-overflow
+    codeql_query: cpp/unbounded-write
+    severity: error
+    affected_file: os/net/mac/ble/ble-l2cap.c
+    affected_function: ble_l2cap_tx_process
+    affected_line_approx: 593
+    commit_fix: 210c39de20cd2fe396e135850556be5c46e0c96d
+    commit_vulnerable: 7024924e9d2cb2287ece598c88058e7de9486041
+    commit_verified: false
+    structural_fn: false
+    needs_manual_verification: false
+    notes: >
+      data_len used in memcpy into packetbuf_dataptr() without checking it fits
+      within PACKETBUF_SIZE - packetbuf_hdrlen(). Misconfigured BLE MTU values
+      could exceed the packetbuf capacity causing buffer overflow.
+      Fix adds bounds enforcement before the copy.
+      Confirmed in Shen et al. ISSTA 2025. PR merged by Contiki-NG maintainers.
