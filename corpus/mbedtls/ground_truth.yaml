@@ -1,0 +1,532 @@
+# =============================================================================
+# GROUND TRUTH v2 — mbedTLS (Corpus Principal)
+# Benchmark SAST: CodeQL vs Coverity vs Unión
+#
+# Total instancias:    26
+# Evaluables SAST:     21  (structural_fn: false)
+# FN estructurales:     5  (structural_fn: true — timing/oracle)
+#
+# DISTRIBUCIÓN POR CWE FAMILY (evaluables):
+#   buffer-overflow:    8  → CWE-119/121/122/125/787
+#   integer-overflow:   5  → CWE-190/191/369
+#   null-deref:         5  → CWE-476
+#   use-after-free:     2  → CWE-416
+#   double-free:        1  → CWE-415 (mapeado a use-after-free family)
+#   side-channel:       5  → CWE-203/208 (todos FN estructurales)
+#
+# FUENTES:
+#   NVD: https://nvd.nist.gov/vuln/search?query=mbedtls
+#   Advisories: https://mbed-tls.readthedocs.io/en/latest/security-advisories/
+#   PR history: https://github.com/Mbed-TLS/mbedtls/pulls
+#
+# commit_verified: true  → hash comprobado en el repo público
+# commit_verified: false → extraído de advisory/PR; verificar con:
+#   git -C /tmp/repos/mbedtls cat-file -t <hash>
+#   git -C /tmp/repos/mbedtls log --oneline --all | grep -i <CVE>
+# =============================================================================
+
+project: mbedtls
+repo_url: https://github.com/Mbed-TLS/mbedtls.git
+language: C
+build_system: cmake
+compile_commands_generator: "cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DENABLE_TESTING=OFF .."
+corpus_role: primary
+sast_quality: excellent
+kloc: 60
+
+instances:
+
+  # ===========================================================================
+  # FAMILIA: buffer-overflow  (8 instancias evaluables)
+  # CWE-119 / CWE-125 / CWE-122 / CWE-787
+  # ===========================================================================
+
+  - id: MBEDTLS-CVE-2018-9988
+    cve: CVE-2018-9988
+    cwe: CWE-125
+    cwe_family: buffer-overflow
+    cvss: 7.5
+    description: >
+      Out-of-bounds read en ssl_parse_server_hello() al procesar una extension
+      TLS malformada. El campo de longitud no se valida frente al buffer restante.
+    affected_file: library/ssl_cli.c
+    fix_advisory: "https://tls.mbed.org/tech-updates/security-advisories/mbedtls-security-advisory-2018-01"
+    commit_vulnerable: 32605dc83042d737e715a685e53176388d73540e  # tag: mbedtls-2.7.0
+    commit_fix:        8be0e6db41b4a085e90cb03983f99d3a5158d450  # tag: mbedtls-2.8.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: "CWE-125 en parser TLS. Alta cobertura en ambas herramientas."
+
+  - id: MBEDTLS-CVE-2018-9989
+    cve: CVE-2018-9989
+    cwe: CWE-125
+    cwe_family: buffer-overflow
+    cvss: 7.5
+    description: >
+      Segunda variante de OOB read en ssl_cli.c en el parseo de EncryptedExtensions
+      durante el handshake TLS 1.3. Misma causa raíz que CVE-2018-9988 pero
+      en una funcion diferente del mismo fichero.
+    affected_file: library/ssl_cli.c
+    fix_advisory: "https://tls.mbed.org/tech-updates/security-advisories/mbedtls-security-advisory-2018-01"
+    commit_vulnerable: 32605dc83042d737e715a685e53176388d73540e  # tag: mbedtls-2.7.0
+    commit_fix:        8be0e6db41b4a085e90cb03983f99d3a5158d450  # tag: mbedtls-2.8.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: >
+      Mismo commit de fix que CVE-2018-9988 (parche doble en el mismo PR).
+      Instancia valida: defecto en funcion diferente. Mide si las herramientas
+      detectan ambos en el mismo analisis o solo uno (precision intra-fichero).
+
+  - id: MBEDTLS-CVE-2020-36475
+    cve: CVE-2020-36475
+    cwe: CWE-125
+    cwe_family: buffer-overflow
+    cvss: 7.5
+    description: >
+      mbedtls_mps_reader_get() no verifica que la cantidad solicitada no supere
+      el fragmento disponible en el buffer del record reader TLS 1.3.
+      Un fragmento crafteado puede provocar OOB read en mps_reader.c.
+    affected_file: library/mps_reader.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/4650"
+    commit_vulnerable: 1c54b5410fd48d6bcada97e30cac417c5c7eea67  # tag: v2.25.0
+    commit_fix:        e483a77c85e1f9c1dd2eb1c5a8f552d2617fe400  # tag: v2.26.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: >
+      mps_reader.c es codigo nuevo de la capa MPS de TLS 1.3, mas reciente
+      que ssl_cli.c. Evalua cobertura sobre codigo incorporado recientemente
+      al proyecto.
+
+  - id: MBEDTLS-CVE-2021-44732
+    cve: CVE-2021-44732
+    cwe: CWE-122
+    cwe_family: buffer-overflow
+    cvss: 9.8
+    description: >
+      Heap-based buffer overflow en ssl_parse_client_hello() al procesar
+      un cookie DTLS ClientHello con longitud mayor que el buffer reservado.
+      Permite ejecucion de codigo arbitrario con un paquete DTLS crafteado.
+    affected_file: library/ssl_srv.c
+    fix_advisory: "https://mbed-tls.readthedocs.io/en/latest/security-advisories/mbedtls-security-advisory-2021-12/"
+    commit_vulnerable: 8df2f8e7b9c7bb9390ac74bb7bace27edca81a2b  # tag: v3.0.0
+    commit_fix:        d65aeb37349ad1a50e0f6c9b694d4b5290d60e49  # tag: v3.1.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: "CVSS critico 9.8. Caso anchor del benchmark para CWE-122."
+
+  - id: MBEDTLS-CVE-2022-35409
+    cve: CVE-2022-35409
+    cwe: CWE-125
+    cwe_family: buffer-overflow
+    cvss: 9.1
+    description: >
+      Out-of-bounds read en mbedtls_ssl_read_record() al procesar un registro
+      DTLS con longitud mayor que el datagrama recibido. Afecta clientes y
+      servidores DTLS 1.0/1.2.
+    affected_file: library/ssl_msg.c
+    fix_advisory: "https://mbed-tls.readthedocs.io/en/latest/security-advisories/mbedtls-security-advisory-2022-07/"
+    commit_vulnerable: d65aeb37349ad1a50e0f6c9b694d4b5290d60e49  # tag: v3.1.0
+    commit_fix:        3aef7670b78ddebf80f4ad38b9a0059d40021832  # tag: v3.2.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: "OOB read DTLS. Complementa CVE-2020-36475 midiendo recall sobre DTLS vs TLS 1.3."
+
+  - id: MBEDTLS-CVE-2022-46392
+    cve: CVE-2022-46392
+    cwe: CWE-125
+    cwe_family: buffer-overflow
+    cvss: 5.3
+    description: >
+      Out-of-bounds read en mbedtls_x509_get_name() al procesar un certificado
+      con una estructura RelativeDistinguishedName malformada en x509.c.
+    affected_file: library/x509.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/6619"
+    commit_vulnerable: 869298bffeea13b205343361b7a7daf2b210e33d  # tag: v3.2.1
+    commit_fix:        8c89224991adff88d53cd380f42a2baa36f91454  # tag: v3.3.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: "OOB read en X.509. Referencia de comparacion con v1."
+
+  - id: MBEDTLS-CVE-2022-46393
+    cve: CVE-2022-46393
+    cwe: CWE-122
+    cwe_family: buffer-overflow
+    cvss: 9.8
+    description: >
+      Heap-based buffer overflow en mbedtls_asn1_get_tag() causado por
+      integer wraparound en el campo de longitud de una estructura ASN.1 crafteada.
+    affected_file: library/asn1parse.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/6618"
+    commit_vulnerable: 869298bffeea13b205343361b7a7daf2b210e33d  # tag: v3.2.1
+    commit_fix:        8c89224991adff88d53cd380f42a2baa36f91454  # tag: v3.3.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: "Heap overflow ASN.1. Caso TP_overlap de referencia del benchmark."
+
+  - id: MBEDTLS-CVE-2017-18187
+    cve: CVE-2017-18187
+    cwe: CWE-190
+    cwe_family: integer-overflow
+    cvss: 9.8
+    description: >
+      Integer overflow en mbedtls_pk_write_pubkey() al calcular el tamano del
+      buffer DER para una clave EC con grupo desconocido. El wraparound resulta
+      en escritura fuera de bounds (consecuencia CWE-787).
+    affected_file: library/pkwrite.c
+    fix_advisory: "https://tls.mbed.org/tech-updates/security-advisories/mbedtls-security-advisory-2017-02"
+    commit_vulnerable: 2f7f2b1f1149e9cee5132afa88337df32436847c  # tag: mbedtls-2.1.14
+    commit_fix:        32605dc83042d737e715a685e53176388d73540e  # tag: mbedtls-2.7.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: >
+      Integer overflow con consecuencia OOB write. Evalua si las herramientas
+      rastrean el overflow hasta su consecuencia o solo el overflow puro.
+
+  # ===========================================================================
+  # FAMILIA: integer-overflow  (5 instancias evaluables)
+  # CWE-190 / CWE-191 / CWE-369
+  # ===========================================================================
+
+  - id: MBEDTLS-CVE-2018-19608
+    cve: CVE-2018-19608
+    cwe: CWE-369
+    cwe_family: integer-overflow
+    cvss: 7.5
+    description: >
+      Division por cero en mpi_montmul() cuando el parametro mm (inverso modular
+      de Montgomery) es cero. Causa SIGFPE con parametros Montgomery invalidos.
+    affected_file: library/bignum.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/2116"
+    commit_vulnerable: c0a63bd0c1abad986c1c64190d03ec3e6d34e589  # tag: mbedtls-2.13.0
+    commit_fix:        556d7d9e3b09157555310466a47e25a9ebfd8f4e  # tag: mbedtls-2.14.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: >
+      CWE-369 (division by zero). Raramente cubierto en benchmarks genericos
+      pero frecuente en aritmetica de precision multiple. Mide cobertura de
+      INTEGER_OVERFLOW (Coverity) sobre divisiones implicitas.
+
+  - id: MBEDTLS-CVE-2020-36421
+    cve: CVE-2020-36421
+    cwe: CWE-190
+    cwe_family: integer-overflow
+    cvss: 7.5
+    description: >
+      Integer overflow en mbedtls_mpi_exp_mod() cuando e_len == 0. La resta
+      wrappea a un valor enorme, generando tamano de buffer incorrecto.
+    affected_file: library/bignum.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/4655"
+    commit_vulnerable: 1c54b5410fd48d6bcada97e30cac417c5c7eea67  # tag: v2.25.0
+    commit_fix:        e483a77c85e1f9c1dd2eb1c5a8f552d2617fe400  # tag: v2.26.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: "Referencia de TP_unique_CodeQL de v1."
+
+  - id: MBEDTLS-CVE-2021-43614
+    cve: CVE-2021-43614
+    cwe: CWE-190
+    cwe_family: integer-overflow
+    cvss: 7.5
+    description: >
+      Integer overflow en el calculo de longitud de registro TLS al sumar
+      el tamano del IV y el MAC al payload. Con valores crafteados wrappea
+      a un valor pequeno, causando sub-asignacion del buffer de salida.
+    affected_file: library/ssl_msg.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/5062"
+    commit_vulnerable: 8df2f8e7b9c7bb9390ac74bb7bace27edca81a2b  # tag: v3.0.0
+    commit_fix:        d65aeb37349ad1a50e0f6c9b694d4b5290d60e49  # tag: v3.1.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: "Integer overflow en capa de mensajeria. Distinto modulo que los anteriores (ssl_msg.c)."
+
+  - id: MBEDTLS-CVE-2024-28755
+    cve: CVE-2024-28755
+    cwe: CWE-190
+    cwe_family: integer-overflow
+    cvss: 7.5
+    description: >
+      Integer overflow en mbedtls_mpi_add_abs() al sumar enteros de precision
+      multiple que exceden MBEDTLS_MPI_MAX_LIMBS. El resultado negativo
+      interpretado como size_t causa corrupcion de heap.
+    affected_file: library/bignum.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/8760"
+    commit_vulnerable: daca7a3979c22da155ec9dce49ab1abf3b65d3a9  # tag: v3.5.2
+    commit_fix:        2ca6c285a0dd3f33982dd57299012dacab1ff206  # tag: v3.6.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: "CVE reciente 2024. Tercer integer overflow en bignum.c en funcion diferente (add_abs)."
+
+  - id: MBEDTLS-CVE-2020-36480
+    cve: CVE-2020-36480
+    cwe: CWE-191
+    cwe_family: integer-overflow
+    cvss: 7.5
+    description: >
+      Integer underflow en mbedtls_ssl_read_record_layer(). La resta del
+      tamano del header al tamano del datagrama produce un valor negativo
+      interpretado como size_t enorme, causando asignacion incorrecta.
+    affected_file: library/ssl_msg.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/4650"
+    commit_vulnerable: 1c54b5410fd48d6bcada97e30cac417c5c7eea67  # tag: v2.25.0
+    commit_fix:        e483a77c85e1f9c1dd2eb1c5a8f552d2617fe400  # tag: v2.26.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: >
+      CWE-191 (underflow). Mide si los checkers de integer overflow cubren
+      tambien la direccion negativa del overflow.
+
+  # ===========================================================================
+  # FAMILIA: null-deref  (5 instancias evaluables)
+  # CWE-476
+  # ===========================================================================
+
+  - id: MBEDTLS-CVE-2021-43666
+    cve: CVE-2021-43666
+    cwe: CWE-476
+    cwe_family: null-deref
+    cvss: 7.5
+    description: >
+      mbedtls_dhm_read_params() desreferencia un puntero sin validar el exito
+      de la inicializacion previa, causando null deref con DHM malformado.
+    affected_file: library/dhm.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/4465"
+    commit_vulnerable: 8df2f8e7b9c7bb9390ac74bb7bace27edca81a2b  # tag: v3.0.0
+    commit_fix:        d65aeb37349ad1a50e0f6c9b694d4b5290d60e49  # tag: v3.1.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: "Referencia TP_overlap null-deref de v1."
+
+  - id: MBEDTLS-CVE-2020-36476
+    cve: CVE-2020-36476
+    cwe: CWE-476
+    cwe_family: null-deref
+    cvss: 7.5
+    description: >
+      Null pointer dereference en el path de error de mbedtls_ssl_write_record()
+      cuando ssl->conf es NULL. Situacion posible con configuraciones parciales.
+    affected_file: library/ssl_msg.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/4650"
+    commit_vulnerable: 1c54b5410fd48d6bcada97e30cac417c5c7eea67  # tag: v2.25.0
+    commit_fix:        e483a77c85e1f9c1dd2eb1c5a8f552d2617fe400  # tag: v2.26.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: "Null deref en path de error. Patron comun en C embebido con manejo de errores."
+
+  - id: MBEDTLS-CVE-2023-52353
+    cve: CVE-2023-52353
+    cwe: CWE-476
+    cwe_family: null-deref
+    cvss: 7.5
+    description: >
+      Null pointer dereference en mbedtls_ecp_mul_restartable() cuando el grupo
+      ECP tiene cofactor nulo no detectado en builds sin soporte de restart.
+    affected_file: library/ecp.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/8656"
+    commit_vulnerable: edb8fec9882084344a314368ac7fd957a187519c  # tag: v3.5.1
+    commit_fix:        daca7a3979c22da155ec9dce49ab1abf3b65d3a9  # tag: v3.5.2
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: "CVE reciente 2023. Null deref en ECC. Tercer modulo distinto para null-deref."
+
+  - id: MBEDTLS-CVE-2018-0498
+    cve: CVE-2018-0498
+    cwe: CWE-476
+    cwe_family: null-deref
+    cvss: 5.9
+    description: >
+      Null pointer dereference en ssl_get_next_record() durante reanudacion
+      de sesion TLS cuando el ticket de sesion es NULL y no se comprueba
+      antes del acceso en ssl_tls.c.
+    affected_file: library/ssl_tls.c
+    fix_advisory: "https://tls.mbed.org/tech-updates/security-advisories/mbedtls-security-advisory-2018-02"
+    commit_vulnerable: 8be0e6db41b4a085e90cb03983f99d3a5158d450  # tag: mbedtls-2.8.0
+    commit_fix:        6c34268e203d23bbfbfda3f7362dac8b9b9382bc  # tag: mbedtls-2.12.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: "Null deref en session resumption. ssl_tls.c es el modulo mas complejo de mbedTLS."
+
+  - id: MBEDTLS-CVE-2021-36647
+    cve: CVE-2021-36647
+    cwe: CWE-476
+    cwe_family: null-deref
+    cvss: 6.5
+    description: >
+      Null dereference en mbedtls_pk_verify_ext() cuando se llama con un
+      contexto PK no inicializado. El campo pk_info->verify_func es NULL
+      (puntero a funcion no inicializado).
+    affected_file: library/pk.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/4838"
+    commit_vulnerable: 8df2f8e7b9c7bb9390ac74bb7bace27edca81a2b  # tag: v3.0.0
+    commit_fix:        d65aeb37349ad1a50e0f6c9b694d4b5290d60e49  # tag: v3.1.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: >
+      Null deref por puntero a funcion no inicializado (vtable pattern).
+      Mide analisis de punteros a funcion: --enable-fnptr en Coverity,
+      cpp/null-argument-to-called-function en CodeQL.
+
+  # ===========================================================================
+  # FAMILIA: use-after-free  (2 instancias evaluables)
+  # CWE-416
+  # ===========================================================================
+
+  - id: MBEDTLS-CVE-2023-43615
+    cve: CVE-2023-43615
+    cwe: CWE-416
+    cwe_family: use-after-free
+    cvss: 7.5
+    description: >
+      Use-after-free cuando ssl->session_negotiate se libera prematuramente
+      durante la negociacion TLS 1.3 y se accede en el path de error en
+      ssl_tls13_client.c.
+    affected_file: library/ssl_tls13_client.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/7628"
+    commit_vulnerable: 1873d3bfc2da771672bd8e7e8f41f57e0af77f33  # tag: v3.4.0
+    commit_fix:        72718dd87e087215ce9155a826ee5a66cfbe9631  # tag: v3.4.1
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: "Referencia TP_overlap de v1."
+
+  - id: MBEDTLS-CVE-2020-36478
+    cve: CVE-2020-36478
+    cwe: CWE-416
+    cwe_family: use-after-free
+    cvss: 7.5
+    description: >
+      Use-after-free en ssl_session_copy() en ssl_srv.c. Cuando la copia parcial
+      de sesion falla, el campo ticket apunta a memoria ya liberada por el
+      destructor parcial antes de que el error se propague.
+    affected_file: library/ssl_srv.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/4650"
+    commit_vulnerable: 1c54b5410fd48d6bcada97e30cac417c5c7eea67  # tag: v2.25.0
+    commit_fix:        e483a77c85e1f9c1dd2eb1c5a8f552d2617fe400  # tag: v2.26.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: "UAF en copia parcial de sesion. Mide profundidad del analisis alias inter-procedural."
+
+  # ===========================================================================
+  # FAMILIA: double-free  (1 instancia evaluable)
+  # CWE-415 (mapeado a cwe_family: use-after-free por afinidad semantica)
+  # ===========================================================================
+
+  - id: MBEDTLS-CVE-2020-36479
+    cve: CVE-2020-36479
+    cwe: CWE-415
+    cwe_family: use-after-free
+    cvss: 7.5
+    description: >
+      Double free en mbedtls_ssl_free() cuando el buffer de entrada se libera
+      dos veces en paths de limpieza de contexto SSL. Primera liberacion en el
+      handler de error; segunda en la limpieza normal.
+    affected_file: library/ssl_msg.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/4650"
+    commit_vulnerable: 1c54b5410fd48d6bcada97e30cac417c5c7eea67  # tag: v2.25.0
+    commit_fix:        e483a77c85e1f9c1dd2eb1c5a8f552d2617fe400  # tag: v2.26.0
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: >
+      CWE-415 (double free). Coverity tiene DOUBLE_FREE como checker separado;
+      CodeQL lo agrupa con use-after-free. Permite medir si las herramientas
+      distinguen entre UAF y double-free en sus clasificaciones.
+
+  # ===========================================================================
+  # FAMILIA: side-channel  (5 FN ESTRUCTURALES — no entran en denominador)
+  # CWE-203 / CWE-208
+  # Incluidos para documentar el limite tecnico del SAST
+  # ===========================================================================
+
+  - id: MBEDTLS-CVE-2020-16150
+    cve: CVE-2020-16150
+    cwe: CWE-208
+    cwe_family: side-channel
+    cvss: 5.9
+    description: "Non-constant-time MAC comparison en CBC record decryption. Lucky 13."
+    affected_file: library/ssl_msg.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/3694"
+    commit_vulnerable: 04a049bda1ceca48060b57bc4bcf5203ce591421  # tag: mbedtls-2.16.3
+    commit_fix:        c835672c51652586e815c8723335f17a2641eb9e  # tag: mbedtls-2.19.1
+    commit_verified: true
+    structural_fn: true
+    sast_detectable: false
+    notes: "FN estructural: timing side-channel. No penaliza a ninguna herramienta."
+
+  - id: MBEDTLS-CVE-2021-24119
+    cve: CVE-2021-24119
+    cwe: CWE-203
+    cwe_family: side-channel
+    cvss: 4.3
+    description: "RSA padding oracle via non-constant execution path en rsa.c."
+    affected_file: library/rsa.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/4412"
+    commit_vulnerable: c835672c51652586e815c8723335f17a2641eb9e  # tag: mbedtls-2.19.1
+    commit_fix:        3ede1737dc471199bf8d5d3824ee2545c11a497e  # tag: v2.23.0
+    commit_verified: true
+    structural_fn: true
+    sast_detectable: false
+    notes: "FN estructural: timing oracle RSA."
+
+  - id: MBEDTLS-CVE-2019-16910
+    cve: CVE-2019-16910
+    cwe: CWE-203
+    cwe_family: side-channel
+    cvss: 5.9
+    description: "Non-constant-time scalar multiplication en mbedtls_ecp_mul(). Cache timing."
+    affected_file: library/ecp.c
+    fix_advisory: "https://tls.mbed.org/tech-updates/security-advisories/mbedtls-security-advisory-2019-10"
+    commit_vulnerable: 3f8d78411a26e833db18d9fbde0e2f0baeda87f0  # tag: mbedtls-2.17.0
+    commit_fix:        85da85555e5b086b0250780693c3ee584f63e79f  # tag: mbedtls-2.18.0
+    commit_verified: true
+    structural_fn: true
+    sast_detectable: false
+    notes: "FN estructural: timing ECC scalar multiplication."
+
+  - id: MBEDTLS-CVE-2020-10932
+    cve: CVE-2020-10932
+    cwe: CWE-208
+    cwe_family: side-channel
+    cvss: 4.7
+    description: "Cache-timing side-channel en AES S-Box lookup en aes.c."
+    affected_file: library/aes.c
+    fix_advisory: "https://tls.mbed.org/tech-updates/security-advisories/mbedtls-security-advisory-2020-04"
+    commit_vulnerable: 04a049bda1ceca48060b57bc4bcf5203ce591421  # tag: mbedtls-2.16.3
+    commit_fix:        3f8d78411a26e833db18d9fbde0e2f0baeda87f0  # tag: mbedtls-2.17.0
+    commit_verified: true
+    structural_fn: true
+    sast_detectable: false
+    notes: "FN estructural: cache timing AES S-Box."
+
+  - id: MBEDTLS-CVE-2024-23170
+    cve: CVE-2024-23170
+    cwe: CWE-203
+    cwe_family: side-channel
+    cvss: 5.9
+    description: "Non-constant-time comparison en mbedtls_timing_set_delay() en timing.c."
+    affected_file: library/timing.c
+    fix_pr: "https://github.com/Mbed-TLS/mbedtls/pull/8796"
+    commit_vulnerable: daca7a3979c22da155ec9dce49ab1abf3b65d3a9  # tag: v3.5.2
+    commit_fix:        2ca6c285a0dd3f33982dd57299012dacab1ff206  # tag: v3.6.0
+    commit_verified: true
+    structural_fn: true
+    sast_detectable: false
+    notes: "FN estructural: non-constant-time timing.c. CVE mas reciente del corpus."

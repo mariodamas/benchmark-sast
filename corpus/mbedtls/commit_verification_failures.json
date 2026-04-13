@@ -1,0 +1,42 @@
+{
+  "CVE-2021-44732": {
+    "status": "FAILED",
+    "reason": "no_fix_found"
+  },
+  "CVE-2022-35409": {
+    "status": "FAILED",
+    "reason": "no_fix_found"
+  },
+  "CVE-2017-18187": {
+    "status": "FAILED",
+    "reason": "no_fix_found"
+  },
+  "CVE-2021-43666": {
+    "status": "FAILED",
+    "reason": "no_fix_found"
+  },
+  "CVE-2018-0498": {
+    "status": "FAILED",
+    "reason": "no_fix_found"
+  },
+  "CVE-2021-36647": {
+    "status": "FAILED",
+    "reason": "no_fix_found"
+  },
+  "CVE-2023-43615": {
+    "status": "FAILED",
+    "reason": "no_fix_found"
+  },
+  "CVE-2019-16910": {
+    "status": "FAILED",
+    "reason": "no_fix_found"
+  },
+  "CVE-2020-10932": {
+    "status": "FAILED",
+    "reason": "no_fix_found"
+  },
+  "CVE-2024-23170": {
+    "status": "FAILED",
+    "reason": "no_fix_found"
+  }
+}

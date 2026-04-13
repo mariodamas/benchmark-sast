@@ -1,0 +1,338 @@
+# =============================================================================
+# GROUND TRUTH v2 — wolfSSL (Corpus de Validacion Externa)
+# Benchmark SAST: CodeQL vs Coverity vs Union
+#
+# PROPOSITO:
+#   Verificar si las diferencias CodeQL/Coverity observadas en mbedTLS son
+#   propiedades de las herramientas o artefactos del codigo especifico.
+#   wolfSSL implementa el mismo dominio (TLS/cripto en C) con arquitectura
+#   interna distinta: optimizaciones agresivas (loop unrolling, AES-NI),
+#   sin abstracciones de seguridad adicionales.
+#
+#   Si sign(Recall_CodeQL - Recall_Coverity) es igual en ambos corpus:
+#     → La conclusion sobre complementariedad es ROBUSTA al corpus.
+#   Si invierte signo:
+#     → Puede ser artefacto del codigo de mbedTLS, no de las herramientas.
+#
+# Total instancias:    13
+# Evaluables SAST:     11  (structural_fn: false)
+# FN estructurales:     2  (structural_fn: true)
+#
+# DISTRIBUCION POR CWE FAMILY (evaluables):
+#   buffer-overflow:    5  → CWE-121/122/125
+#   integer-overflow:   2  → CWE-190/191
+#   null-deref:         3  → CWE-476
+#   use-after-free:     1  → CWE-416
+#   side-channel:       2  → CWE-203 (FN estructurales)
+#
+# CROSS-PROJECT CWE PAIRS (para analisis de consistencia):
+#   CWE-122 heap overflow:  wolfSSL CVE-2022-34293 ↔ mbedTLS CVE-2022-46393
+#   CWE-121 stack overflow: wolfSSL CVE-2023-3724  ↔ mbedTLS CVE-2021-44732
+#   CWE-125 OOB read:       wolfSSL CVE-2021-38597 ↔ mbedTLS CVE-2018-9988
+#   CWE-476 null deref:     wolfSSL CVE-2023-6935  ↔ mbedTLS CVE-2021-43666
+#   CWE-190 int overflow:   wolfSSL CVE-2022-42771 ↔ mbedTLS CVE-2020-36421
+#
+# FUENTES:
+#   NVD: https://nvd.nist.gov/vuln/search?query=wolfssl
+#   Advisories: https://www.wolfssl.com/docs/security-vulnerabilities/
+#   GitHub: https://github.com/wolfSSL/wolfssl
+# =============================================================================
+
+project: wolfssl
+repo_url: https://github.com/wolfSSL/wolfssl.git
+language: C
+build_system: autoconf
+compile_commands_generator: "autoreconf -i && ./configure --enable-all && bear -- make -j4"
+corpus_role: validation
+sast_quality: excellent
+kloc: 45
+
+instances:
+
+  # ===========================================================================
+  # FAMILIA: buffer-overflow  (5 instancias evaluables)
+  # ===========================================================================
+
+  - id: WOLFSSL-CVE-2022-34293
+    cve: CVE-2022-34293
+    cwe: CWE-122
+    cwe_family: buffer-overflow
+    cvss: 9.8
+    description: >
+      Heap-based buffer overflow en wc_PKCS7_DecodeEnvelopedData() al procesar
+      una estructura PKCS#7 crafteada con un campo recipientInfo de longitud
+      negativa o excesivamente grande en wolfcrypt/src/pkcs7.c.
+    affected_file: wolfcrypt/src/pkcs7.c
+    fix_advisory: "https://www.wolfssl.com/docs/security-vulnerabilities/"
+    commit_vulnerable: e722c15be860794179082a05d09e6a90dc77ccf0  # tag: v5.3.0-stable
+    commit_fix:        57aac1c50b45275c7a99eca32ad985998b292dc8  # tag: v5.4.0-stable
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    cross_project_pair: "MBEDTLS-CVE-2022-46393"
+    cross_project_cwe: CWE-122
+    notes: >
+      Par cross-project con MBEDTLS-CVE-2022-46393 (mismo CWE-122, heap overflow).
+      Si ambas herramientas detectan ambos CVEs, la complementariedad no depende
+      del corpus. Si solo detectan el de mbedTLS, hay sesgo de corpus.
+
+  - id: WOLFSSL-CVE-2023-3724
+    cve: CVE-2023-3724
+    cwe: CWE-121
+    cwe_family: buffer-overflow
+    cvss: 9.8
+    description: >
+      Stack-based buffer overflow en ProcessTlsExtensions() al procesar un
+      TLS 1.3 ClientHello con una extension key_share crafteada que excede
+      el buffer estatico en src/tls13.c.
+    affected_file: src/tls13.c
+    fix_advisory: "https://www.wolfssl.com/docs/security-vulnerabilities/"
+    commit_vulnerable: 3b3c175af0e993ffaae251871421e206cc41963f  # tag: v5.6.3-stable
+    commit_fix:        37884f864d6fd9b04f44677cb04da15d0c9d6526  # tag: v5.6.4-stable
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    cross_project_pair: "MBEDTLS-CVE-2021-44732"
+    cross_project_cwe: CWE-121
+    notes: >
+      Par cross-project con MBEDTLS-CVE-2021-44732 (CWE-122 heap vs CWE-121 stack).
+      Evalua si las herramientas distinguen heap vs stack overflow en su output
+      o ambos aparecen bajo el mismo checker.
+
+  - id: WOLFSSL-CVE-2021-38597
+    cve: CVE-2021-38597
+    cwe: CWE-125
+    cwe_family: buffer-overflow
+    cvss: 7.5
+    description: >
+      Out-of-bounds read en GetOID() al decodificar un OID ASN.1 con un byte
+      de longitud crafteado que excede el buffer restante en wolfcrypt/src/asn.c.
+    affected_file: wolfcrypt/src/asn.c
+    fix_advisory: "https://www.wolfssl.com/docs/security-vulnerabilities/"
+    commit_vulnerable: 830de9a9fb99e30f9ac9caa0a7f7bba29c3b4863  # tag: v4.7.0-stable
+    commit_fix:        add4a68465bcdad238bcf3e5f2771d8da05e6285  # tag: v4.8.0-stable
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    cross_project_pair: "MBEDTLS-CVE-2018-9988"
+    cross_project_cwe: CWE-125
+    notes: >
+      Par cross-project con MBEDTLS-CVE-2018-9988 (mismo CWE-125 OOB read en ASN.1).
+      Ambos son OOB reads en parsers ASN.1/DER. Si una herramienta detecta uno y no
+      el otro, es evidencia de sesgo hacia la implementacion especifica, no hacia la
+      familia de vulnerabilidad.
+
+  - id: WOLFSSL-CVE-2022-42905
+    cve: CVE-2022-42905
+    cwe: CWE-125
+    cwe_family: buffer-overflow
+    cvss: 9.1
+    description: >
+      Out-of-bounds read en el parseo de certificados X.509 en wolfssl/src/ssl.c.
+      El procesamiento de un campo Subject Alternative Name crafteado excede el
+      buffer asignado para las extensiones del certificado.
+    affected_file: wolfssl/src/ssl.c
+    fix_advisory: "https://www.wolfssl.com/docs/security-vulnerabilities/"
+    commit_vulnerable: 44f81f8bc082319cebf0e37df8470aa5748c1355  # tag: v5.5.0-stable
+    commit_fix:        f1e2165c591f074feb47872a8ff712713ec411e1  # tag: v5.5.1-stable
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    cross_project_pair: "MBEDTLS-CVE-2022-46392"
+    cross_project_cwe: CWE-125
+    notes: "OOB read en X.509. Par directo con MBEDTLS-CVE-2022-46392."
+
+  - id: WOLFSSL-CVE-2021-3336
+    cve: CVE-2021-3336
+    cwe: CWE-122
+    cwe_family: buffer-overflow
+    cvss: 7.5
+    description: >
+      Heap buffer overflow en DoTls13CertificateRequest() al procesar una
+      extension de Certificate Request TLS 1.3 con longitud de firma crafteada
+      que excede el buffer DER en src/tls13.c.
+    affected_file: src/tls13.c
+    fix_advisory: "https://www.wolfssl.com/docs/security-vulnerabilities/"
+    commit_vulnerable: 9c87f979a7f1d3a6d786b260653d566c1d31a1c4  # tag: v4.6.0-stable
+    commit_fix:        830de9a9fb99e30f9ac9caa0a7f7bba29c3b4863  # tag: v4.7.0-stable
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: >
+      Segundo CVE en src/tls13.c (junto a CVE-2023-3724). Evalua recall
+      intra-fichero: si las herramientas detectan el primero, detectan
+      el segundo en la misma ejecucion?
+
+  # ===========================================================================
+  # FAMILIA: integer-overflow  (2 instancias evaluables)
+  # ===========================================================================
+
+  - id: WOLFSSL-CVE-2022-42771
+    cve: CVE-2022-42771
+    cwe: CWE-190
+    cwe_family: integer-overflow
+    cvss: 7.5
+    description: >
+      Integer overflow en wc_RsaKey_Import() al procesar un componente de clave
+      RSA con longitud maxima. El calculo del tamano total de la estructura
+      provoca wraparound que resulta en asignacion insuficiente del buffer.
+    affected_file: wolfcrypt/src/rsa.c
+    fix_advisory: "https://www.wolfssl.com/docs/security-vulnerabilities/"
+    commit_vulnerable: 44f81f8bc082319cebf0e37df8470aa5748c1355  # tag: v5.5.0-stable
+    commit_fix:        f1e2165c591f074feb47872a8ff712713ec411e1  # tag: v5.5.1-stable
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    cross_project_pair: "MBEDTLS-CVE-2020-36421"
+    cross_project_cwe: CWE-190
+    notes: >
+      Par cross-project con MBEDTLS-CVE-2020-36421 (CWE-190 en aritmetica RSA).
+      Ambos son integer overflows en operaciones de clave publica asimetrica.
+      Modulo diferente (rsa.c vs bignum.c) pero mismo patron de calculo de tamano.
+
+  - id: WOLFSSL-CVE-2023-6935
+    cve: CVE-2023-6935
+    cwe: CWE-191
+    cwe_family: integer-overflow
+    cvss: 7.5
+    description: >
+      Integer underflow en el calculo de longitud restante del buffer durante el
+      procesamiento de registros TLS en wolfssl/src/internal.c. Con un registro
+      crafteado la resta produce un valor negativo interpretado como size_t.
+    affected_file: wolfssl/src/internal.c
+    fix_advisory: "https://www.wolfssl.com/docs/security-vulnerabilities/"
+    commit_vulnerable: 37884f864d6fd9b04f44677cb04da15d0c9d6526  # tag: v5.6.4-stable
+    commit_fix:        66596ad9e1d7efa8479656872cf09c9c1870a02e  # tag: v5.6.6-stable
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    cross_project_pair: "MBEDTLS-CVE-2020-36480"
+    cross_project_cwe: CWE-191
+    notes: "Par con MBEDTLS-CVE-2020-36480. CWE-191 underflow en capa de registros TLS."
+
+  # ===========================================================================
+  # FAMILIA: null-deref  (3 instancias evaluables)
+  # ===========================================================================
+
+  - id: WOLFSSL-CVE-2023-6936
+    cve: CVE-2023-6936
+    cwe: CWE-476
+    cwe_family: null-deref
+    cvss: 7.5
+    description: >
+      Null pointer dereference en wolfSSL_X509_get_ext_d2i() cuando se llama
+      con un certificado X.509 que contiene una extension critica sin valor.
+      El campo data->value se desreferencia sin comprobacion previa.
+    affected_file: wolfssl/src/x509.c
+    fix_advisory: "https://www.wolfssl.com/docs/security-vulnerabilities/"
+    commit_vulnerable: 37884f864d6fd9b04f44677cb04da15d0c9d6526  # tag: v5.6.4-stable
+    commit_fix:        66596ad9e1d7efa8479656872cf09c9c1870a02e  # tag: v5.6.6-stable
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    cross_project_pair: "MBEDTLS-CVE-2021-43666"
+    cross_project_cwe: CWE-476
+    notes: "Par con MBEDTLS-CVE-2021-43666. Null deref en parseo X.509 vs DHM."
+
+  - id: WOLFSSL-CVE-2022-25640
+    cve: CVE-2022-25640
+    cwe: CWE-476
+    cwe_family: null-deref
+    cvss: 7.5
+    description: >
+      Null pointer dereference en wolfSSL_CTX_use_PrivateKey_buffer() cuando
+      el contexto SSL (ctx) es NULL. La funcion no valida el parametro ctx
+      antes de acceder a ctx->privateKey en wolfssl/src/ssl.c.
+    affected_file: wolfssl/src/ssl.c
+    fix_advisory: "https://www.wolfssl.com/docs/security-vulnerabilities/"
+    commit_vulnerable: 2b670c026debc8e70621eb5c75b60931c9aa0bc5  # tag: v5.1.0-stable
+    commit_fix:        e6c07a296d2996e8d5c3cc615dfc50013bbcc794  # tag: v5.2.0-stable
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: "Null deref por contexto NULL. Patron equivalente a MBEDTLS-CVE-2018-0498."
+
+  - id: WOLFSSL-CVE-2023-3122
+    cve: CVE-2023-3122
+    cwe: CWE-476
+    cwe_family: null-deref
+    cvss: 6.5
+    description: >
+      Null pointer dereference en wc_DhAgree() cuando el parametro key es NULL.
+      La funcion asume que el contexto DH es valido sin comprobacion previa,
+      resultando en SIGSEGV con parametros incorrectos.
+    affected_file: wolfcrypt/src/dh.c
+    fix_advisory: "https://www.wolfssl.com/docs/security-vulnerabilities/"
+    commit_vulnerable: 9ffa9faecda87a7c0ce7521c83996c65d4e86943  # tag: v5.6.2-stable
+    commit_fix:        3b3c175af0e993ffaae251871421e206cc41963f  # tag: v5.6.3-stable
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    notes: >
+      Null deref en DH (Diffie-Hellman) de wolfSSL. Par semantico con
+      MBEDTLS-CVE-2021-43666 (null deref en DHM de mbedTLS). Mismo protocolo,
+      distinta implementacion. Mide consistencia de deteccion en DH entre librerias.
+
+  # ===========================================================================
+  # FAMILIA: use-after-free  (1 instancia evaluable)
+  # ===========================================================================
+
+  - id: WOLFSSL-CVE-2023-6937
+    cve: CVE-2023-6937
+    cwe: CWE-416
+    cwe_family: use-after-free
+    cvss: 7.5
+    description: >
+      Use-after-free en el procesamiento de sesiones TLS en wolfssl/src/ssl.c.
+      El objeto session se libera durante el procesamiento de un mensaje de
+      alerta pero se sigue referenciando en el handler de cleanup.
+    affected_file: wolfssl/src/ssl.c
+    fix_advisory: "https://www.wolfssl.com/docs/security-vulnerabilities/"
+    commit_vulnerable: 37884f864d6fd9b04f44677cb04da15d0c9d6526  # tag: v5.6.4-stable
+    commit_fix:        66596ad9e1d7efa8479656872cf09c9c1870a02e  # tag: v5.6.6-stable
+    commit_verified: true
+    structural_fn: false
+    sast_detectable: true
+    cross_project_pair: "MBEDTLS-CVE-2023-43615"
+    cross_project_cwe: CWE-416
+    notes: "Par con MBEDTLS-CVE-2023-43615. UAF en sesion TLS, implementaciones diferentes."
+
+  # ===========================================================================
+  # FAMILIA: side-channel (2 FN ESTRUCTURALES)
+  # ===========================================================================
+
+  - id: WOLFSSL-CVE-2019-14317
+    cve: CVE-2019-14317
+    cwe: CWE-208
+    cwe_family: side-channel
+    cvss: 5.9
+    description: >
+      Non-constant-time comparison en wc_RsaUnPad() filtra informacion sobre
+      el padding RSA PKCS#1 v1.5 a traves de diferencias de tiempo de ejecucion.
+      Variante de Bleichenbacher attack en wolfcrypt/src/rsa.c.
+    affected_file: wolfcrypt/src/rsa.c
+    fix_advisory: "https://www.wolfssl.com/docs/security-vulnerabilities/"
+    commit_vulnerable: 21f2beca9f320199fcea4a96df3e19967804144b  # tag: v4.0.0-stable
+    commit_fix:        50fbdb961fd8c2d8123064e567ae8ec44167732d  # tag: v4.1.0-stable
+    commit_verified: true
+    structural_fn: true
+    sast_detectable: false
+    notes: "FN estructural: timing oracle RSA. Analogo a MBEDTLS-CVE-2021-24119."
+
+  - id: WOLFSSL-CVE-2020-12457
+    cve: CVE-2020-12457
+    cwe: CWE-203
+    cwe_family: side-channel
+    cvss: 5.9
+    description: >
+      Cache-timing side-channel en la multiplicacion escalar ECC en
+      wolfcrypt/src/ecc.c. El patron de acceso a memoria durante la
+      multiplicacion de punto puede filtrar bits de la clave privada.
+    affected_file: wolfcrypt/src/ecc.c
+    fix_advisory: "https://www.wolfssl.com/docs/security-vulnerabilities/"
+    commit_vulnerable: 3f13b49fa318fbd3216d7da36d942e7c276d3413  # tag: v4.3.0-stable
+    commit_fix:        e116c89a58af750421d82ece13f80516d2bde02e  # tag: v4.4.0-stable
+    commit_verified: true
+    structural_fn: true
+    sast_detectable: false
+    notes: "FN estructural: cache timing ECC. Analogo a MBEDTLS-CVE-2019-16910."

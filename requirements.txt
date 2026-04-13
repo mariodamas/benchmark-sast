@@ -1,0 +1,30 @@
+# =============================================================================
+# requirements.txt — Benchmark SAST
+# Dependencias Python del benchmark (herramientas externas no incluidas aquí)
+# =============================================================================
+
+# Parsing de ground truth YAML
+pyyaml>=6.0
+
+# Validación de esquemas JSON (validate_ground_truth.py)
+jsonschema>=4.0
+
+# Generación de tablas en formato Markdown (print_summary.py)
+# No requiere dependencias externas — usa f-strings nativas
+
+# ---------------------------------------------------------------------------
+# HERRAMIENTAS EXTERNAS (no se instalan con pip — requieren instalación manual)
+# ---------------------------------------------------------------------------
+# CodeQL:
+#   wget https://github.com/github/codeql-action/releases/download/
+#          codeql-bundle-v2.16.5/codeql-bundle-linux64.tar.gz
+#   tar -xzf codeql-bundle-linux64.tar.gz -C /opt
+#   export CODEQL_HOME=/opt/codeql
+#
+# Coverity:
+#   Requiere licencia corporativa de Synopsys.
+#   Cipherbit dispone de licencia. Instalar según instrucciones del proveedor.
+#   export COVERITY_HOME=/opt/cov-analysis
+#
+# bear (para compile_commands.json en proyectos autoconf):
+#   sudo apt-get install bear
