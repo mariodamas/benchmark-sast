@@ -1,0 +1,17 @@
+{
+  "apache_nuttx": {
+    "default": "__NOT_CONFIGURED__"
+  },
+  "contiki_ng_emboss": {
+    "default": "__NOT_CONFIGURED__"
+  },
+  "epk2extract": {
+    "default": "set PATH=C:\\Program Files\\LLVM\\bin;%PATH% && if not exist build mkdir build && clang -c -O0 -g -Iinclude -Isrc src\\stream\\tsfile.c -o build\\tsfile.obj && clang -c -O0 -g -Iinclude -Isrc src\\epk1.c -o build\\epk1.obj && (clang -c -O0 -g -Iinclude -Isrc src\\pkg.c -o build\\pkg.obj || clang -c -O0 -g -Iinclude -Isrc src\\mediatek_pkg.c -o build\\pkg.obj) && clang -c -O0 -g -Iinclude -Isrc src\\main.c -o build\\main.obj"
+  },
+  "mbed_os": {
+    "default": "mkdir build 2>nul & C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -g -Xclang -gcodeview -I. -Iplatform -Iplatform/include -Istorage -Istorage/kvstore/securestore/include -Istorage/kvstore/kvstore_global_api/include -Iconnectivity -Iconnectivity/drivers/cellular/framework/API -Iconnectivity/lorawan/include -Iconnectivity/lorawan/include/lorawan -Iconnectivity/FEATURE_BLE/libraries/cordio_stack/wsf/include -Iconnectivity/FEATURE_BLE/libraries/cordio_stack/ble-host/include -Iconnectivity/FEATURE_BLE/libraries/cordio_stack/ble-host/sources/stack/att -Iconnectivity/FEATURE_BLE/libraries/cordio_stack/ble-host/sources/stack/l2c -Iconnectivity/FEATURE_BLE/libraries/cordio_stack/ble-host/sources/stack/cfg -Itargets -Ihal/include -Idrivers/include -MD -MT build\\coverity_probe.obj -MF build\\coverity_probe.d -o build\\coverity_probe.obj -c connectivity/FEATURE_BLE/libraries/cordio_stack/ble-host/sources/stack/att/att_eatt.c"
+  },
+  "raylib": {
+    "default": "set PATH=C:\\Program Files\\LLVM\\bin;%PATH% && if exist build rmdir /s /q build && cmake -S . -B build -G Ninja -DCMAKE_MAKE_PROGRAM=C:/Users/EXTmdamas/AppData/Local/Microsoft/WinGet/Packages/Ninja-build.Ninja_Microsoft.Winget.Source_8wekyb3d8bbwe/ninja.exe -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DBUILD_SHARED_LIBS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_GAMES=OFF -DCMAKE_BUILD_TYPE=Debug && cmake --build build"
+  }
+}

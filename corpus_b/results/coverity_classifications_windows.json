@@ -1,0 +1,66 @@
+[
+  {
+    "id": "MBEDOS-DEFECT-001",
+    "project": "mbed_os",
+    "classification": "FN",
+    "cwe_id": "CWE-476",
+    "cwe_family": "null-deref",
+    "affected_file": "connectivity/FEATURE_BLE/libraries/cordio_stack/ble-host/sources/stack/att/att_eatt.c",
+    "V": {
+      "found": false,
+      "issue_count": 0
+    },
+    "S": {
+      "found": false,
+      "issue_count": 0
+    }
+  },
+  {
+    "id": "MBEDOS-DEFECT-002",
+    "project": "mbed_os",
+    "classification": "FN",
+    "cwe_id": "CWE-476",
+    "cwe_family": "null-deref",
+    "affected_file": "storage/kvstore/securestore/source/SecureStore.cpp",
+    "V": {
+      "found": false,
+      "issue_count": 0
+    },
+    "S": {
+      "found": false,
+      "issue_count": 0
+    }
+  },
+  {
+    "id": "MBEDOS-DEFECT-003",
+    "project": "mbed_os",
+    "classification": "FN",
+    "cwe_id": "CWE-120",
+    "cwe_family": "buffer-overflow",
+    "affected_file": "connectivity/drivers/cellular/GEMALTO/CINTERION/GEMALTO_CINTERION_CellularStack.cpp",
+    "V": {
+      "found": false,
+      "issue_count": 0
+    },
+    "S": {
+      "found": false,
+      "issue_count": 0
+    }
+  },
+  {
+    "id": "MBEDOS-DEFECT-004",
+    "project": "mbed_os",
+    "classification": "FN",
+    "cwe_id": "CWE-190",
+    "cwe_family": "integer-overflow",
+    "affected_file": "connectivity/lorawan/include/lorawan/LoRaRadio.h",
+    "V": {
+      "found": false,
+      "issue_count": 0
+    },
+    "S": {
+      "found": false,
+      "issue_count": 0
+    }
+  }
+]
